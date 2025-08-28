@@ -14,7 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      inventory_alerts: {
+        Row: {
+          alert_type: string
+          id: string
+          inventory_item_id: string
+          message: string
+          sent_at: string
+          shop_domain: string
+        }
+        Insert: {
+          alert_type: string
+          id?: string
+          inventory_item_id: string
+          message: string
+          sent_at?: string
+          shop_domain: string
+        }
+        Update: {
+          alert_type?: string
+          id?: string
+          inventory_item_id?: string
+          message?: string
+          sent_at?: string
+          shop_domain?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_alerts_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_items: {
+        Row: {
+          created_at: string
+          id: string
+          inventory_quantity: number | null
+          low_stock_threshold: number | null
+          shop_domain: string
+          shopify_product_id: number | null
+          shopify_variant_id: number | null
+          sku: string | null
+          status: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          inventory_quantity?: number | null
+          low_stock_threshold?: number | null
+          shop_domain: string
+          shopify_product_id?: number | null
+          shopify_variant_id?: number | null
+          sku?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          inventory_quantity?: number | null
+          low_stock_threshold?: number | null
+          shop_domain?: string
+          shopify_product_id?: number | null
+          shopify_variant_id?: number | null
+          sku?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

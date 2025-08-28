@@ -11,6 +11,7 @@ import {
   Banner,
   Modal,
   FormLayout,
+  Spinner,
 } from '@shopify/polaris';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -21,6 +22,11 @@ interface InventoryItem {
   inventory_quantity: number;
   low_stock_threshold: number;
   status: 'in_stock' | 'low_stock' | 'out_of_stock';
+  shopify_product_id?: number;
+  shopify_variant_id?: number;
+  shop_domain?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 const InventoryDashboard: React.FC = () => {
@@ -43,40 +49,87 @@ const InventoryDashboard: React.FC = () => {
   const fetchInventory = async () => {
     try {
       setLoading(true);
-      // This will be replaced with actual Shopify API calls
-      // For now, we'll use sample data
-      const sampleData: InventoryItem[] = [
-        {
-          id: '1',
-          title: 'Sample Product 1',
-          sku: 'SKU-001',
-          inventory_quantity: 5,
-          low_stock_threshold: 10,
-          status: 'low_stock',
-        },
-        {
-          id: '2', 
-          title: 'Sample Product 2',
-          sku: 'SKU-002',
-          inventory_quantity: 25,
-          low_stock_threshold: 15,
-          status: 'in_stock',
-        },
-        {
-          id: '3',
-          title: 'Sample Product 3',
-          sku: 'SKU-003',
-          inventory_quantity: 0,
-          low_stock_threshold: 5,
-          status: 'out_of_stock',
-        },
-      ];
       
-      setInventory(sampleData);
+      // Fetch from Supabase database
+      const { data, error } = await supabase
+        .from('inventory_items')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching inventory:', error);
+        // Fallback to sample data if database is empty
+        const sampleData: InventoryItem[] = [
+          {
+            id: '1',
+            title: 'Sample Product 1',
+            sku: 'SKU-001',
+            inventory_quantity: 5,
+            low_stock_threshold: 10,
+            status: 'low_stock',
+          },
+          {
+            id: '2', 
+            title: 'Sample Product 2',
+            sku: 'SKU-002',
+            inventory_quantity: 25,
+            low_stock_threshold: 15,
+            status: 'in_stock',
+          },
+          {
+            id: '3',
+            title: 'Sample Product 3',
+            sku: 'SKU-003',
+            inventory_quantity: 0,
+            low_stock_threshold: 5,
+            status: 'out_of_stock',
+          },
+        ];
+        setInventory(sampleData);
+      } else {
+        // Map database data to our interface
+        const mappedData: InventoryItem[] = (data || []).map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          sku: item.sku || '',
+          inventory_quantity: item.inventory_quantity,
+          low_stock_threshold: item.low_stock_threshold,
+          status: item.status as 'in_stock' | 'low_stock' | 'out_of_stock',
+          shopify_product_id: item.shopify_product_id,
+          shopify_variant_id: item.shopify_variant_id,
+          shop_domain: item.shop_domain,
+          created_at: item.created_at,
+          updated_at: item.updated_at,
+        }));
+        setInventory(mappedData);
+      }
     } catch (error) {
       console.error('Error fetching inventory:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const updateThreshold = async (itemId: string, newThreshold: number) => {
+    try {
+      const { error } = await supabase
+        .from('inventory_items')
+        .update({ low_stock_threshold: newThreshold })
+        .eq('id', itemId);
+
+      if (error) {
+        console.error('Error updating threshold:', error);
+        return;
+      }
+
+      // Update local state
+      setInventory(prev => prev.map(item => 
+        item.id === itemId 
+          ? { ...item, low_stock_threshold: newThreshold }
+          : item
+      ));
+    } catch (error) {
+      console.error('Error updating threshold:', error);
     }
   };
 
@@ -111,11 +164,48 @@ const InventoryDashboard: React.FC = () => {
   const lowStockCount = inventory.filter(item => item.status === 'low_stock').length;
   const outOfStockCount = inventory.filter(item => item.status === 'out_of_stock').length;
 
-  const handleAddItem = () => {
-    // This would integrate with Shopify API to add/update items
-    console.log('Adding new item:', newItem);
-    setShowAddModal(false);
-    setNewItem({ title: '', sku: '', inventory_quantity: 0, low_stock_threshold: 10 });
+  const handleAddItem = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('inventory_items')
+        .insert({
+          title: newItem.title,
+          sku: newItem.sku,
+          inventory_quantity: newItem.inventory_quantity,
+          low_stock_threshold: newItem.low_stock_threshold,
+          shop_domain: 'demo-shop', // This would come from Shopify context
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error adding item:', error);
+        return;
+      }
+
+      // Add to local state
+      if (data) {
+        const mappedNewItem: InventoryItem = {
+          id: data.id,
+          title: data.title,
+          sku: data.sku || '',
+          inventory_quantity: data.inventory_quantity,
+          low_stock_threshold: data.low_stock_threshold,
+          status: data.status as 'in_stock' | 'low_stock' | 'out_of_stock',
+          shopify_product_id: data.shopify_product_id,
+          shopify_variant_id: data.shopify_variant_id,
+          shop_domain: data.shop_domain,
+          created_at: data.created_at,
+          updated_at: data.updated_at,
+        };
+        setInventory(prev => [mappedNewItem, ...prev]);
+      }
+      
+      setShowAddModal(false);
+      setNewItem({ title: '', sku: '', inventory_quantity: 0, low_stock_threshold: 10 });
+    } catch (error) {
+      console.error('Error adding item:', error);
+    }
   };
 
   return (

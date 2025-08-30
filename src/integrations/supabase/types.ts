@@ -56,6 +56,7 @@ export type Database = {
           inventory_quantity: number | null
           low_stock_threshold: number | null
           shop_domain: string
+          shop_id: string | null
           shopify_product_id: number | null
           shopify_variant_id: number | null
           sku: string | null
@@ -69,6 +70,7 @@ export type Database = {
           inventory_quantity?: number | null
           low_stock_threshold?: number | null
           shop_domain: string
+          shop_id?: string | null
           shopify_product_id?: number | null
           shopify_variant_id?: number | null
           sku?: string | null
@@ -82,11 +84,50 @@ export type Database = {
           inventory_quantity?: number | null
           low_stock_threshold?: number | null
           shop_domain?: string
+          shop_id?: string | null
           shopify_product_id?: number | null
           shopify_variant_id?: number | null
           sku?: string | null
           status?: string | null
           title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_items_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shops: {
+        Row: {
+          access_token: string
+          email: string | null
+          id: string
+          installed_at: string
+          shop_domain: string
+          shop_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          email?: string | null
+          id?: string
+          installed_at?: string
+          shop_domain: string
+          shop_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          email?: string | null
+          id?: string
+          installed_at?: string
+          shop_domain?: string
+          shop_name?: string | null
           updated_at?: string
         }
         Relationships: []

@@ -102,6 +102,27 @@ export type Database = {
           },
         ]
       }
+      oauth_states: {
+        Row: {
+          created_at: string
+          id: string
+          shop_domain: string
+          state: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          shop_domain: string
+          state: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          shop_domain?: string
+          state?: string
+        }
+        Relationships: []
+      }
       shops: {
         Row: {
           access_token: string

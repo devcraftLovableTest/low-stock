@@ -24,7 +24,7 @@ serve(async (req) => {
 
     if (action === 'fetch-products') {
       // Fetch products from Shopify Admin API
-      const shopifyResponse = await fetch(`https://${shopDomain}/admin/api/2023-10/products.json`, {
+      const shopifyResponse = await fetch(`https://${shopDomain}/admin/api/2025-07/products.json`, {
         headers: {
           'X-Shopify-Access-Token': accessToken,
           'Content-Type': 'application/json',
@@ -38,6 +38,17 @@ serve(async (req) => {
       const data = await shopifyResponse.json()
       console.log('Fetched products from Shopify:', data.products?.length || 0)
 
+      // Get shop from database
+      const { data: shop } = await supabaseClient
+        .from('shops')
+        .select('id')
+        .eq('shop_domain', shopDomain)
+        .single()
+
+      if (!shop) {
+        throw new Error('Shop not found')
+      }
+
       // Store/update products in Supabase
       for (const product of data.products || []) {
         for (const variant of product.variants || []) {
@@ -50,6 +61,7 @@ serve(async (req) => {
               sku: variant.sku,
               inventory_quantity: variant.inventory_quantity || 0,
               shop_domain: shopDomain,
+              shop_id: shop.id,
             }, {
               onConflict: 'shopify_variant_id'
             })

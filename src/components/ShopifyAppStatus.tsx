@@ -1,0 +1,111 @@
+import React, { useEffect, useState } from 'react';
+import { supabase } from "@/integrations/supabase/client";
+import ShopifyInstallation from './ShopifyInstallation';
+import InventoryDashboard from './InventoryDashboard';
+import { Banner, Layout, Spinner } from '@shopify/polaris';
+
+interface Shop {
+  id: string;
+  shop_domain: string;
+  shop_name: string;
+  email: string;
+  installed_at: string;
+}
+
+const ShopifyAppStatus: React.FC = () => {
+  const [loading, setLoading] = useState(true);
+  const [shop, setShop] = useState<Shop | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    checkInstallationStatus();
+  }, []);
+
+  const checkInstallationStatus = async () => {
+    try {
+      // Get shop domain from URL parameters (when redirected back from Shopify)
+      const urlParams = new URLSearchParams(window.location.search);
+      const shopDomain = urlParams.get('shop') || getShopDomainFromHost();
+      
+      if (shopDomain) {
+        // Check if shop is installed in our database
+        const { data, error } = await supabase
+          .from('shops')
+          .select('*')
+          .eq('shop_domain', shopDomain)
+          .single();
+
+        if (error && error.code !== 'PGRST116') {
+          console.error('Error checking shop status:', error);
+          setError('Failed to check installation status');
+        } else if (data) {
+          setShop(data);
+        }
+      }
+    } catch (err) {
+      console.error('Error in checkInstallationStatus:', err);
+      setError('Failed to check installation status');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getShopDomainFromHost = (): string | null => {
+    // Try to extract shop domain from embedded app context
+    const urlParams = new URLSearchParams(window.location.search);
+    const host = urlParams.get('host');
+    
+    if (host) {
+      try {
+        const decodedHost = atob(host);
+        const shopDomain = decodedHost.split('/')[0];
+        return shopDomain.endsWith('.myshopify.com') ? shopDomain : null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const handleInstall = (shopDomain: string) => {
+    // This will redirect to OAuth, so we don't need to do anything here
+    console.log('Starting installation for:', shopDomain);
+  };
+
+  if (loading) {
+    return (
+      <Layout>
+        <Layout.Section>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            height: '200px' 
+          }}>
+            <Spinner accessibilityLabel="Loading" size="large" />
+          </div>
+        </Layout.Section>
+      </Layout>
+    );
+  }
+
+  if (error) {
+    return (
+      <Layout>
+        <Layout.Section>
+          <Banner tone="critical">
+            <p>{error}</p>
+          </Banner>
+        </Layout.Section>
+      </Layout>
+    );
+  }
+
+  if (!shop) {
+    return <ShopifyInstallation onInstall={handleInstall} />;
+  }
+
+  return <InventoryDashboard shop={shop} />;
+};
+
+export default ShopifyAppStatus;

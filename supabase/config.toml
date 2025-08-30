@@ -21,6 +21,9 @@ port = 54324
 [functions.shopify-webhook]
 verify_jwt = false
 
+[functions.shopify-oauth]
+verify_jwt = false
+
 [functions.shopify-api]
 verify_jwt = false
 

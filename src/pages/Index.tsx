@@ -1,7 +1,7 @@
-import InventoryDashboard from "@/components/InventoryDashboard";
+import ShopifyAppStatus from "@/components/ShopifyAppStatus";
 
 const Index = () => {
-  return <InventoryDashboard />;
+  return <ShopifyAppStatus />;
 };
 
 export default Index;

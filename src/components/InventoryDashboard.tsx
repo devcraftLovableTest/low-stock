@@ -29,7 +29,19 @@ interface InventoryItem {
   updated_at?: string;
 }
 
-const InventoryDashboard: React.FC = () => {
+interface Shop {
+  id: string;
+  shop_domain: string;
+  shop_name: string;
+  email: string;
+  installed_at: string;
+}
+
+interface InventoryDashboardProps {
+  shop: Shop;
+}
+
+const InventoryDashboard: React.FC<InventoryDashboardProps> = ({ shop }) => {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,42 +62,16 @@ const InventoryDashboard: React.FC = () => {
     try {
       setLoading(true);
       
-      // Fetch from Supabase database
+      // Fetch from Supabase database for this specific shop
       const { data, error } = await supabase
         .from('inventory_items')
         .select('*')
+        .eq('shop_domain', shop.shop_domain)
         .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching inventory:', error);
-        // Fallback to sample data if database is empty
-        const sampleData: InventoryItem[] = [
-          {
-            id: '1',
-            title: 'Sample Product 1',
-            sku: 'SKU-001',
-            inventory_quantity: 5,
-            low_stock_threshold: 10,
-            status: 'low_stock',
-          },
-          {
-            id: '2', 
-            title: 'Sample Product 2',
-            sku: 'SKU-002',
-            inventory_quantity: 25,
-            low_stock_threshold: 15,
-            status: 'in_stock',
-          },
-          {
-            id: '3',
-            title: 'Sample Product 3',
-            sku: 'SKU-003',
-            inventory_quantity: 0,
-            low_stock_threshold: 5,
-            status: 'out_of_stock',
-          },
-        ];
-        setInventory(sampleData);
+        setInventory([]);
       } else {
         // Map database data to our interface
         const mappedData: InventoryItem[] = (data || []).map((item: any) => ({
@@ -173,7 +159,7 @@ const InventoryDashboard: React.FC = () => {
           sku: newItem.sku,
           inventory_quantity: newItem.inventory_quantity,
           low_stock_threshold: newItem.low_stock_threshold,
-          shop_domain: 'demo-shop', // This would come from Shopify context
+          shop_domain: shop.shop_domain, // Use the current shop's domain
         })
         .select()
         .single();
@@ -210,10 +196,13 @@ const InventoryDashboard: React.FC = () => {
 
   return (
     <Page
-      title="Inventory Tracker"
+      title={`Inventory Tracker - ${shop.shop_name || shop.shop_domain}`}
       primaryAction={{
-        content: 'Add Item',
-        onAction: () => setShowAddModal(true),
+        content: 'Sync with Shopify',
+        onAction: async () => {
+          // Add sync functionality here
+          await fetchInventory();
+        },
       }}
     >
       <Layout>

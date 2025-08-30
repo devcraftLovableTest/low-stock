@@ -1,7 +1,6 @@
 import React, { ReactNode } from 'react';
 import { AppProvider } from '@shopify/polaris';
 import createApp from '@shopify/app-bridge';
-import { Banner, Layout } from '@shopify/polaris';
 import '@shopify/polaris/build/esm/styles.css';
 
 interface ShopifyAppProviderProps {
@@ -15,27 +14,20 @@ const ShopifyAppProvider: React.FC<ShopifyAppProviderProps> = ({ children }) => 
     forceRedirect: true,
   };
 
-  // Check if we're running in Shopify admin context
+  // Check if we're running in Shopify admin context or standalone
   const isEmbedded = new URLSearchParams(location.search).get('embedded') === '1';
+  const hasHost = new URLSearchParams(location.search).get('host');
 
-  if (!isEmbedded) {
+  // Allow standalone access for installation flow
+  if (!isEmbedded && !hasHost) {
     return (
-      <AppProvider i18n={{}}>
-        <Layout>
-          <Layout.Section>
-            <Banner
-              title="This app must be accessed through Shopify Admin"
-              tone="warning"
-            >
-              <p>Please access this app through your Shopify admin panel.</p>
-            </Banner>
-          </Layout.Section>
-        </Layout>
+      <AppProvider i18n={{}} features={{ newDesignLanguage: true }}>
+        {children}
       </AppProvider>
     );
   }
 
-  // Initialize App Bridge
+  // Initialize App Bridge for embedded context
   const app = createApp(appBridgeConfig);
 
   return (

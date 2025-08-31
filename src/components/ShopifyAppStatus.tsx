@@ -43,7 +43,7 @@ const ShopifyAppStatus: React.FC = () => {
         } else if (shopDomain) {
           // Shop domain found but not installed - auto-redirect to installation
           const installUrl = `https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-oauth?action=install&shop=${shopDomain}`;
-          window.location.href = installUrl;
+          window.top ? (window.top.location.href = installUrl) : (window.location.href = installUrl);
           return;
         }
       }

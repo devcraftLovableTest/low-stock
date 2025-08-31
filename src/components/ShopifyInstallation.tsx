@@ -24,9 +24,9 @@ const ShopifyInstallation: React.FC<ShopifyInstallationProps> = ({ onInstall }) 
     setError('');
 
     try {
-      // Redirect to OAuth installation
+      // Redirect to OAuth installation in top window to avoid X-Frame-Options issues
       const installUrl = `https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-oauth?action=install&shop=${fullDomain}`;
-      window.location.href = installUrl;
+      window.top ? (window.top.location.href = installUrl) : (window.location.href = installUrl);
     } catch (err) {
       setError('Failed to start installation process');
       setLoading(false);

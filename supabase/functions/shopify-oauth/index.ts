@@ -123,7 +123,7 @@ serve(async (req) => {
         .eq('state', state)
 
       // Redirect back to app with success
-      const appUrl = `https://${shop}/admin/apps/${Deno.env.get('SHOPIFY_APP_HANDLE') || 'inventory-tracker'}?installed=true`
+      const appUrl = `${Deno.env.get('SUPABASE_URL')?.replace('/functions/v1', '') || 'http://localhost:5173'}?shop=${shop}&installed=true`
       
       return new Response(null, {
         status: 302,

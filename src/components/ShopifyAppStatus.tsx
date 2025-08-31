@@ -33,13 +33,18 @@ const ShopifyAppStatus: React.FC = () => {
           .from('shops')
           .select('*')
           .eq('shop_domain', shopDomain)
-          .single();
+          .maybeSingle();
 
-        if (error && error.code !== 'PGRST116') {
+        if (error) {
           console.error('Error checking shop status:', error);
           setError('Failed to check installation status');
         } else if (data) {
           setShop(data);
+        } else if (shopDomain) {
+          // Shop domain found but not installed - auto-redirect to installation
+          const installUrl = `https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-oauth?action=install&shop=${shopDomain}`;
+          window.location.href = installUrl;
+          return;
         }
       }
     } catch (err) {

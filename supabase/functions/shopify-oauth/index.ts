@@ -103,9 +103,10 @@ serve(async (req) => {
       })
 
       const shopInfo = await shopInfoResponse.json()
+      console.log('Shop info received:', shopInfo)
 
       // Store shop credentials
-      await supabaseClient
+      const { data: shopData, error: shopError } = await supabaseClient
         .from('shops')
         .upsert({
           shop_domain: shop,
@@ -116,14 +117,21 @@ serve(async (req) => {
           onConflict: 'shop_domain'
         })
 
+      if (shopError) {
+        console.error('Failed to save shop:', shopError)
+        return new Response('Failed to save shop data', { status: 500 })
+      }
+
+      console.log('Shop saved successfully:', shopData)
+
       // Clean up state
       await supabaseClient
         .from('oauth_states')
         .delete()
         .eq('state', state)
 
-      // Redirect back to app with success
-      const appUrl = `${Deno.env.get('SUPABASE_URL')?.replace('/functions/v1', '') || 'http://localhost:5173'}?shop=${shop}&installed=true`
+      // Redirect back to the app - use the correct app URL
+      const appUrl = `https://lovable.dev/projects/c2a12ba6-79bd-4b7c-bd47-e1c32e53c1bd?shop=${shop}&installed=true`
       
       return new Response(null, {
         status: 302,

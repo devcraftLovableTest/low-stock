@@ -1,7 +1,12 @@
 import ShopifyAppStatus from "@/components/ShopifyAppStatus";
+import ShopifyAppProvider from "@/components/ShopifyAppProvider";
 
 const Index = () => {
-  return <ShopifyAppStatus />;
+  return (
+    <ShopifyAppProvider>
+      <ShopifyAppStatus />
+    </ShopifyAppProvider>
+  );
 };
 
 export default Index;

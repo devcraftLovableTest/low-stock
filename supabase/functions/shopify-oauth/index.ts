@@ -30,7 +30,11 @@ serve(async (req) => {
 
       const clientId = 'b211150c38f46b557626d779ea7a3bcf'
       const scopes = 'read_products,write_products,read_inventory,write_inventory'
-      const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/shopify-oauth?action=callback`
+      const returnUrl = url.searchParams.get('returnUrl') || ''
+      const redirectUriBase = `${Deno.env.get('SUPABASE_URL')}/functions/v1/shopify-oauth?action=callback`
+      const redirectUri = returnUrl
+        ? `${redirectUriBase}&returnUrl=${encodeURIComponent(returnUrl)}`
+        : redirectUriBase
       const state = crypto.randomUUID()
 
       // Store state for verification

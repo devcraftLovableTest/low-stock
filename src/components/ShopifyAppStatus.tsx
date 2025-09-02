@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import ShopifyInstallation from './ShopifyInstallation';
 import InventoryDashboard from './InventoryDashboard';
 import { Banner, Layout, Spinner } from '@shopify/polaris';
+import createApp from '@shopify/app-bridge';
+import { Redirect } from '@shopify/app-bridge/actions';
 
 interface Shop {
   id: string;
@@ -16,6 +18,7 @@ const ShopifyAppStatus: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [shop, setShop] = useState<Shop | null>(null);
   const [error, setError] = useState('');
+  
 
   useEffect(() => {
     checkInstallationStatus();
@@ -42,8 +45,17 @@ const ShopifyAppStatus: React.FC = () => {
           setShop(data);
         } else if (shopDomain) {
           // Shop domain found but not installed - auto-redirect to installation
-          const installUrl = `https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-oauth?action=install&shop=${shopDomain}`;
-          window.top ? (window.top.location.href = installUrl) : (window.location.href = installUrl);
+          const returnUrl = window.location.origin + window.location.pathname;
+          const installUrl = `https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-oauth?action=install&shop=${shopDomain}&returnUrl=${encodeURIComponent(returnUrl)}`;
+          try {
+            const host = new URLSearchParams(window.location.search).get('host') || '';
+            const app = createApp({ apiKey: 'b211150c38f46b557626d779ea7a3bcf', host, forceRedirect: true });
+            const redirect = Redirect.create(app);
+            redirect.dispatch(Redirect.Action.REMOTE, installUrl);
+          } catch (e) {
+            // Fallback for standalone or if App Bridge init fails
+            window.top ? (window.top.location.href = installUrl) : (window.location.href = installUrl);
+          }
           return;
         }
       }

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Card, Layout, Button, TextField, Banner, Text } from '@shopify/polaris';
+import createApp from '@shopify/app-bridge';
+import { Redirect } from '@shopify/app-bridge/actions';
 
 interface ShopifyInstallationProps {
   onInstall: (shopDomain: string) => void;
@@ -24,9 +26,18 @@ const ShopifyInstallation: React.FC<ShopifyInstallationProps> = ({ onInstall }) 
     setError('');
 
     try {
-      // Redirect to OAuth installation in top window to avoid X-Frame-Options issues
-      const installUrl = `https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-oauth?action=install&shop=${fullDomain}`;
-      window.top ? (window.top.location.href = installUrl) : (window.location.href = installUrl);
+      // Redirect to OAuth installation using App Bridge to escape iframe
+      const returnUrl = window.location.origin + window.location.pathname
+      const installUrl = `https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-oauth?action=install&shop=${fullDomain}&returnUrl=${encodeURIComponent(returnUrl)}`;
+      try {
+        const host = new URLSearchParams(window.location.search).get('host') || '';
+        const app = createApp({ apiKey: 'b211150c38f46b557626d779ea7a3bcf', host, forceRedirect: true });
+        const redirect = Redirect.create(app);
+        redirect.dispatch(Redirect.Action.REMOTE, installUrl);
+      } catch (e) {
+        // Fallback for standalone
+        window.top ? (window.top.location.href = installUrl) : (window.location.href = installUrl);
+      }
     } catch (err) {
       setError('Failed to start installation process');
       setLoading(false);

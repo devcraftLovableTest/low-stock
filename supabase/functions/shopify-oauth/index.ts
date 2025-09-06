@@ -58,24 +58,31 @@ serve(async (req) => {
       })
     }
 
-    if (useraction === 'callback') {
+    // Handle callback - check for both useraction=callback or missing useraction (Shopify redirect)
+    if (useraction === 'callback' || (!useraction && url.searchParams.has('code'))) {
       const code = url.searchParams.get('code')
       const state = url.searchParams.get('state')
       const shop = url.searchParams.get('shop')
 
       if (!code || !state || !shop) {
+        console.error('Missing parameters:', { code: !!code, state: !!state, shop: !!shop })
         return new Response('Missing required parameters', { status: 400 })
       }
 
+      console.log('Looking for state:', state, 'for shop:', shop)
+
       // Verify state and get return URL
-      const { data: stateData } = await supabaseClient
+      const { data: stateData, error: stateError } = await supabaseClient
         .from('oauth_states')
         .select('*')
         .eq('state', state)
         .eq('shop_domain', shop)
         .single()
 
-      if (!stateData) {
+      console.log('State lookup result:', { stateData, stateError })
+
+      if (!stateData || stateError) {
+        console.error('State verification failed:', stateError)
         return new Response('Invalid state parameter', { status: 400 })
       }
 

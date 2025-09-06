@@ -28,7 +28,7 @@ const ShopifyInstallation: React.FC<ShopifyInstallationProps> = ({ onInstall }) 
     try {
       // Get OAuth URL from backend
       const returnUrl = window.location.origin + window.location.pathname;
-      const prepareUrl = `https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-oauth?action=prepare&shop=${fullDomain}&returnUrl=${encodeURIComponent(returnUrl)}`;
+      const prepareUrl = `https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-oauth?useraction=prepare&shop=${fullDomain}&returnUrl=${encodeURIComponent(returnUrl)}`;
       
       const response = await fetch(prepareUrl);
       const data = await response.json();

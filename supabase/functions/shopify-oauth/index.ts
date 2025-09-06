@@ -19,9 +19,9 @@ serve(async (req) => {
     )
 
     const url = new URL(req.url)
-    const action = url.searchParams.get('action')
+    const useraction = url.searchParams.get('useraction')
 
-    if (action === 'prepare') {
+    if (useraction === 'prepare') {
       const shop = url.searchParams.get('shop')
       const returnUrl = url.searchParams.get('returnUrl') || ''
       
@@ -34,7 +34,7 @@ serve(async (req) => {
 
       const clientId = 'b211150c38f46b557626d779ea7a3bcf'
       const scopes = 'read_products,write_products,read_inventory,write_inventory'
-      const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/shopify-oauth?action=callback`
+      const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/shopify-oauth?useraction=callback`
       const state = crypto.randomUUID()
 
       // Store state and return URL for verification
@@ -58,7 +58,7 @@ serve(async (req) => {
       })
     }
 
-    if (action === 'callback') {
+    if (useraction === 'callback') {
       const code = url.searchParams.get('code')
       const state = url.searchParams.get('state')
       const shop = url.searchParams.get('shop')
@@ -147,7 +147,7 @@ serve(async (req) => {
       })
     }
 
-    return new Response('Invalid action', { status: 400 })
+    return new Response('Invalid useraction', { status: 400 })
 
   } catch (error) {
     console.error('OAuth error:', error)

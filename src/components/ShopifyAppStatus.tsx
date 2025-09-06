@@ -46,7 +46,7 @@ const ShopifyAppStatus: React.FC = () => {
         } else if (shopDomain) {
           // Shop domain found but not installed - auto-redirect to installation
           const returnUrl = window.location.origin + window.location.pathname;
-          const prepareUrl = `https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-oauth?action=prepare&shop=${shopDomain}&returnUrl=${encodeURIComponent(returnUrl)}`;
+          const prepareUrl = `https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-oauth?useraction=prepare&shop=${shopDomain}&returnUrl=${encodeURIComponent(returnUrl)}`;
           
           try {
             const response = await fetch(prepareUrl);

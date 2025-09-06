@@ -46,15 +46,25 @@ const ShopifyAppStatus: React.FC = () => {
         } else if (shopDomain) {
           // Shop domain found but not installed - auto-redirect to installation
           const returnUrl = window.location.origin + window.location.pathname;
-          const installUrl = `https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-oauth?action=install&shop=${shopDomain}&returnUrl=${encodeURIComponent(returnUrl)}`;
+          const prepareUrl = `https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-oauth?action=prepare&shop=${shopDomain}&returnUrl=${encodeURIComponent(returnUrl)}`;
+          
           try {
-            const host = new URLSearchParams(window.location.search).get('host') || '';
-            const app = createApp({ apiKey: 'b211150c38f46b557626d779ea7a3bcf', host, forceRedirect: true });
-            const redirect = Redirect.create(app);
-            redirect.dispatch(Redirect.Action.REMOTE, installUrl);
+            const response = await fetch(prepareUrl);
+            const data = await response.json();
+            
+            if (response.ok) {
+              try {
+                const host = new URLSearchParams(window.location.search).get('host') || '';
+                const app = createApp({ apiKey: 'b211150c38f46b557626d779ea7a3bcf', host, forceRedirect: true });
+                const redirect = Redirect.create(app);
+                redirect.dispatch(Redirect.Action.REMOTE, data.authUrl);
+              } catch (e) {
+                // Fallback for standalone or if App Bridge init fails
+                window.top ? (window.top.location.href = data.authUrl) : (window.location.href = data.authUrl);
+              }
+            }
           } catch (e) {
-            // Fallback for standalone or if App Bridge init fails
-            window.top ? (window.top.location.href = installUrl) : (window.location.href = installUrl);
+            console.error('Failed to prepare OAuth:', e);
           }
           return;
         }

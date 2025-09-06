@@ -26,20 +26,29 @@ const ShopifyInstallation: React.FC<ShopifyInstallationProps> = ({ onInstall }) 
     setError('');
 
     try {
-      // Redirect to OAuth installation using App Bridge to escape iframe
-      const returnUrl = window.location.origin + window.location.pathname
-      const installUrl = `https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-oauth?action=install&shop=${fullDomain}&returnUrl=${encodeURIComponent(returnUrl)}`;
+      // Get OAuth URL from backend
+      const returnUrl = window.location.origin + window.location.pathname;
+      const prepareUrl = `https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-oauth?action=prepare&shop=${fullDomain}&returnUrl=${encodeURIComponent(returnUrl)}`;
+      
+      const response = await fetch(prepareUrl);
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to prepare installation');
+      }
+
+      // Direct redirect to Shopify OAuth
       try {
         const host = new URLSearchParams(window.location.search).get('host') || '';
         const app = createApp({ apiKey: 'b211150c38f46b557626d779ea7a3bcf', host, forceRedirect: true });
         const redirect = Redirect.create(app);
-        redirect.dispatch(Redirect.Action.REMOTE, installUrl);
+        redirect.dispatch(Redirect.Action.REMOTE, data.authUrl);
       } catch (e) {
         // Fallback for standalone
-        window.top ? (window.top.location.href = installUrl) : (window.location.href = installUrl);
+        window.top ? (window.top.location.href = data.authUrl) : (window.location.href = data.authUrl);
       }
     } catch (err) {
-      setError('Failed to start installation process');
+      setError(err.message || 'Failed to start installation process');
       setLoading(false);
     }
   };

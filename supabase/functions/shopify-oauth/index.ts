@@ -21,26 +21,31 @@ serve(async (req) => {
     const url = new URL(req.url)
     const action = url.searchParams.get('action')
 
-    if (action === 'install') {
+    if (action === 'prepare') {
       const shop = url.searchParams.get('shop')
+      const returnUrl = url.searchParams.get('returnUrl') || ''
       
       if (!shop) {
-        return new Response('Missing shop parameter', { status: 400 })
+        return new Response(JSON.stringify({ error: 'Missing shop parameter' }), { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
       }
 
       const clientId = 'b211150c38f46b557626d779ea7a3bcf'
       const scopes = 'read_products,write_products,read_inventory,write_inventory'
-      const returnUrl = url.searchParams.get('returnUrl') || ''
-      const redirectUriBase = `${Deno.env.get('SUPABASE_URL')}/functions/v1/shopify-oauth?action=callback`
-      const redirectUri = returnUrl
-        ? `${redirectUriBase}&returnUrl=${encodeURIComponent(returnUrl)}`
-        : redirectUriBase
+      const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/shopify-oauth?action=callback`
       const state = crypto.randomUUID()
 
-      // Store state for verification
+      // Store state and return URL for verification
       await supabaseClient
         .from('oauth_states')
-        .insert({ state, shop_domain: shop, created_at: new Date().toISOString() })
+        .insert({ 
+          state, 
+          shop_domain: shop, 
+          return_url: returnUrl,
+          created_at: new Date().toISOString() 
+        })
 
       const authUrl = `https://${shop}/admin/oauth/authorize?` +
         `client_id=${clientId}&` +
@@ -48,12 +53,8 @@ serve(async (req) => {
         `redirect_uri=${encodeURIComponent(redirectUri)}&` +
         `state=${state}`
 
-      return new Response(null, {
-        status: 302,
-        headers: {
-          'Location': authUrl,
-          ...corsHeaders
-        }
+      return new Response(JSON.stringify({ authUrl }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
@@ -66,7 +67,7 @@ serve(async (req) => {
         return new Response('Missing required parameters', { status: 400 })
       }
 
-      // Verify state
+      // Verify state and get return URL
       const { data: stateData } = await supabaseClient
         .from('oauth_states')
         .select('*')
@@ -77,6 +78,8 @@ serve(async (req) => {
       if (!stateData) {
         return new Response('Invalid state parameter', { status: 400 })
       }
+
+      const returnUrl = stateData.return_url || `https://preview--low-stock.lovable.app/?shop=${shop}&installed=true`
 
       // Exchange code for access token
       const tokenResponse = await fetch(`https://${shop}/admin/oauth/access_token`, {
@@ -134,13 +137,11 @@ serve(async (req) => {
         .delete()
         .eq('state', state)
 
-      // Redirect back to the app - use the correct app URL
-      const appUrl = `https://lovable.dev/projects/c2a12ba6-79bd-4b7c-bd47-e1c32e53c1bd?shop=${shop}&installed=true`
-      
+      // Redirect back to the stored return URL
       return new Response(null, {
         status: 302,
         headers: {
-          'Location': appUrl,
+          'Location': returnUrl,
           ...corsHeaders
         }
       })

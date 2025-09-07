@@ -38,60 +38,124 @@ serve(async (req) => {
     console.log('Shopify API request:', { action, shopDomain })
 
     if (action === 'fetch-products') {
-      if (!shopDomain || !accessToken) {
+      if (!shopDomain) {
         return new Response(
-          JSON.stringify({ error: 'Missing shopDomain or accessToken' }),
+          JSON.stringify({ error: 'Missing shopDomain' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
 
-      console.log('Fetching products for shop:', shopDomain)
-      
-      // Fetch products from Shopify Admin API
-      const shopifyResponse = await fetch(`https://${shopDomain}/admin/api/2024-07/products.json`, {
-        headers: {
-          'X-Shopify-Access-Token': accessToken,
-          'Content-Type': 'application/json',
-        },
-      })
+      // Resolve access token from DB if not provided
+      let token = accessToken as string | undefined
+      let shopId: string | null = null
 
-      console.log('Shopify API response status:', shopifyResponse.status)
+      if (!token) {
+        const { data: shopRow, error: shopErr } = await supabaseClient
+          .from('shops')
+          .select('id, access_token')
+          .eq('shop_domain', shopDomain)
+          .maybeSingle()
 
-      if (!shopifyResponse.ok) {
-        const errorText = await shopifyResponse.text()
-        console.error('Shopify API error details:', errorText)
-        throw new Error(`Shopify API error: ${shopifyResponse.status} - ${errorText}`)
+        if (shopErr || !shopRow) {
+          console.error('Failed to resolve shop token:', shopErr)
+          return new Response(
+            JSON.stringify({ error: 'Shop not found or token missing' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+        token = shopRow.access_token
+        shopId = shopRow.id
+      } else {
+        // Fetch shop id for upserts
+        const { data: shopRow } = await supabaseClient
+          .from('shops')
+          .select('id')
+          .eq('shop_domain', shopDomain)
+          .maybeSingle()
+        shopId = shopRow?.id ?? null
       }
 
-      const data = await shopifyResponse.json()
-      console.log('Fetched products from Shopify:', data.products?.length || 0)
+      console.log('Fetching products via GraphQL for shop:', shopDomain)
 
-      // Get shop from database
-      const { data: shop } = await supabaseClient
-        .from('shops')
-        .select('id')
-        .eq('shop_domain', shopDomain)
-        .single()
+      const gqlQuery = `
+        query FetchProducts($first:Int!, $variantsFirst:Int!){
+          products(first: $first) {
+            edges {
+              node {
+                id
+                title
+                variants(first: $variantsFirst) {
+                  edges {
+                    node {
+                      id
+                      sku
+                      inventoryQuantity
+                      price { amount }
+                      compareAtPrice { amount }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `
 
-      if (!shop) {
-        throw new Error('Shop not found')
+      const shopifyResponse = await fetch(`https://${shopDomain}/admin/api/2025-07/graphql.json`, {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': token!,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: gqlQuery, variables: { first: 100, variantsFirst: 100 } })
+      })
+
+      console.log('Shopify GraphQL response status:', shopifyResponse.status)
+
+      const gql = await shopifyResponse.json().catch(async () => ({
+        parseError: await shopifyResponse.text()
+      }))
+
+      if (!shopifyResponse.ok || (gql as any).errors) {
+        console.error('Shopify GraphQL error:', (gql as any).errors || (gql as any).parseError)
+        throw new Error(`Shopify API error: ${shopifyResponse.status}`)
+      }
+
+      const edges = (gql as any).data?.products?.edges || []
+      console.log('Fetched products (edges):', edges.length)
+
+      // Helper to extract numeric id from GID (gid://shopify/Product/123)
+      const extractNumericId = (gid: string) => {
+        const parts = gid?.split('/') || []
+        const last = parts[parts.length - 1]
+        const n = parseInt(last, 10)
+        return isNaN(n) ? null : n
       }
 
       // Store/update products in Supabase
-      for (const product of data.products || []) {
-        for (const variant of product.variants || []) {
+      for (const pEdge of edges) {
+        const product = pEdge.node
+        const productId = extractNumericId(product.id)
+        const vEdges = product.variants?.edges || []
+        for (const vEdge of vEdges) {
+          const variant = vEdge.node
+          const variantId = extractNumericId(variant.id)
+          const priceAmount = variant.price?.amount ? parseFloat(variant.price.amount) : null
+          const compareAmount = variant.compareAtPrice?.amount ? parseFloat(variant.compareAtPrice.amount) : null
+          const invQty = typeof variant.inventoryQuantity === 'number' ? variant.inventoryQuantity : 0
+
           const { error } = await supabaseClient
             .from('inventory_items')
             .upsert({
-              shopify_product_id: product.id,
-              shopify_variant_id: variant.id,
+              shopify_product_id: productId,
+              shopify_variant_id: variantId,
               title: product.title,
               sku: variant.sku,
-              inventory_quantity: variant.inventory_quantity || 0,
-              price: variant.price ? parseFloat(variant.price) : null,
-              compare_at_price: variant.compare_at_price ? parseFloat(variant.compare_at_price) : null,
+              inventory_quantity: invQty,
+              price: priceAmount,
+              compare_at_price: compareAmount,
               shop_domain: shopDomain,
-              shop_id: shop.id,
+              shop_id: shopId,
             }, {
               onConflict: 'shopify_variant_id'
             })
@@ -103,7 +167,7 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ products: data.products }),
+        JSON.stringify({ products: edges.length }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }

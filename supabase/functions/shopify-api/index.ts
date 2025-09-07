@@ -18,21 +18,49 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY') ?? ''
     )
 
-    const { action, shopDomain, accessToken } = await req.json()
+    // Check if request has body for JSON parsing
+    let requestBody = {}
+    try {
+      const text = await req.text()
+      if (text) {
+        requestBody = JSON.parse(text)
+      }
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError)
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON in request body' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const { action, shopDomain, accessToken } = requestBody
     
     console.log('Shopify API request:', { action, shopDomain })
 
     if (action === 'fetch-products') {
+      if (!shopDomain || !accessToken) {
+        return new Response(
+          JSON.stringify({ error: 'Missing shopDomain or accessToken' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      console.log('Fetching products for shop:', shopDomain)
+      
       // Fetch products from Shopify Admin API
-      const shopifyResponse = await fetch(`https://${shopDomain}/admin/api/2025-07/products.json`, {
+      const shopifyResponse = await fetch(`https://${shopDomain}/admin/api/2024-07/products.json`, {
         headers: {
           'X-Shopify-Access-Token': accessToken,
           'Content-Type': 'application/json',
         },
       })
 
+      console.log('Shopify API response status:', shopifyResponse.status)
+
       if (!shopifyResponse.ok) {
-        throw new Error(`Shopify API error: ${shopifyResponse.status}`)
+        const errorText = await shopifyResponse.text()
+        console.error('Shopify API error details:', errorText)
+        throw new Error(`Shopify API error: ${shopifyResponse.status} - ${errorText}`)
       }
 
       const data = await shopifyResponse.json()
@@ -98,7 +126,7 @@ serve(async (req) => {
     }
 
     if (action === 'update-threshold') {
-      const { itemId, threshold } = await req.json()
+      const { itemId, threshold } = requestBody
       
       const { error } = await supabaseClient
         .from('inventory_items')
@@ -117,7 +145,7 @@ serve(async (req) => {
     }
 
     if (action === 'update-prices') {
-      const { itemId, price, compareAtPrice } = await req.json()
+      const { itemId, price, compareAtPrice } = requestBody
       
       const { error } = await supabaseClient
         .from('inventory_items')

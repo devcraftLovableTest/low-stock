@@ -51,10 +51,12 @@ export type Database = {
       }
       inventory_items: {
         Row: {
+          compare_at_price: number | null
           created_at: string
           id: string
           inventory_quantity: number | null
           low_stock_threshold: number | null
+          price: number | null
           shop_domain: string
           shop_id: string | null
           shopify_product_id: number | null
@@ -65,10 +67,12 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          compare_at_price?: number | null
           created_at?: string
           id?: string
           inventory_quantity?: number | null
           low_stock_threshold?: number | null
+          price?: number | null
           shop_domain: string
           shop_id?: string | null
           shopify_product_id?: number | null
@@ -79,10 +83,12 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          compare_at_price?: number | null
           created_at?: string
           id?: string
           inventory_quantity?: number | null
           low_stock_threshold?: number | null
+          price?: number | null
           shop_domain?: string
           shop_id?: string | null
           shopify_product_id?: number | null

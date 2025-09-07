@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import ShopifyInstallation from './ShopifyInstallation';
-import InventoryDashboard from './InventoryDashboard';
+import ProductsDashboard from './ProductsDashboard';
 import { Banner, Layout, Spinner } from '@shopify/polaris';
 import createApp from '@shopify/app-bridge';
 import { Redirect } from '@shopify/app-bridge/actions';
@@ -132,7 +132,7 @@ const ShopifyAppStatus: React.FC = () => {
     return <ShopifyInstallation onInstall={handleInstall} />;
   }
 
-  return <InventoryDashboard shop={shop} />;
+  return <ProductsDashboard shop={shop} />;
 };
 
 export default ShopifyAppStatus;

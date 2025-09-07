@@ -60,6 +60,8 @@ serve(async (req) => {
               title: product.title,
               sku: variant.sku,
               inventory_quantity: variant.inventory_quantity || 0,
+              price: variant.price ? parseFloat(variant.price) : null,
+              compare_at_price: variant.compare_at_price ? parseFloat(variant.compare_at_price) : null,
               shop_domain: shopDomain,
               shop_id: shop.id,
             }, {
@@ -110,6 +112,28 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ message: 'Threshold updated successfully' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (action === 'update-prices') {
+      const { itemId, price, compareAtPrice } = await req.json()
+      
+      const { error } = await supabaseClient
+        .from('inventory_items')
+        .update({ 
+          price: price ? parseFloat(price) : null,
+          compare_at_price: compareAtPrice ? parseFloat(compareAtPrice) : null
+        })
+        .eq('id', itemId)
+        .eq('shop_domain', shopDomain)
+
+      if (error) {
+        throw error
+      }
+
+      return new Response(
+        JSON.stringify({ message: 'Prices updated successfully' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }

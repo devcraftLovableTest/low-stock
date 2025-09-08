@@ -286,6 +286,30 @@ const ProductsDashboard: React.FC<ProductsDashboardProps> = ({ shop }) => {
       >
         <Layout>
           <Layout.Section>
+            <Card>
+              <div style={{ padding: '16px' }}>
+                <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px' }}>
+                  Shop Information
+                </h2>
+                <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+                  <div>
+                    <p style={{ fontWeight: '600', marginBottom: '4px' }}>Shop Name:</p>
+                    <p style={{ color: '#6B7280' }}>{shop.shop_name || shop.shop_domain}</p>
+                  </div>
+                  <div>
+                    <p style={{ fontWeight: '600', marginBottom: '4px' }}>Domain:</p>
+                    <p style={{ color: '#6B7280' }}>{shop.shop_domain}</p>
+                  </div>
+                  <div>
+                    <p style={{ fontWeight: '600', marginBottom: '4px' }}>Products:</p>
+                    <p style={{ color: '#6B7280' }}>{products.length} items</p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </Layout.Section>
+
+          <Layout.Section>
             {products.length === 0 && (
               <Banner tone="info">
                 <p>No products found. Click "Sync with Shopify" to import your products.</p>

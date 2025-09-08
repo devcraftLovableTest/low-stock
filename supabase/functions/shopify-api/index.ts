@@ -45,55 +45,44 @@ serve(async (req) => {
         )
       }
 
-      // Resolve access token from DB if not provided
-      let token = accessToken as string | undefined
+      // Always resolve access token from DB to ensure correct scopes
+      let token: string | undefined
       let shopId: string | null = null
 
-      if (!token) {
-        console.log('No token provided, fetching from database for shop:', shopDomain)
-        const { data: shopRow, error: shopErr } = await supabaseClient
-          .from('shops')
-          .select('id, access_token')
-          .eq('shop_domain', shopDomain)
-          .maybeSingle()
+      console.log('Fetching access token from database for shop:', shopDomain)
+      const { data: shopRow, error: shopErr } = await supabaseClient
+        .from('shops')
+        .select('id, access_token')
+        .eq('shop_domain', shopDomain)
+        .maybeSingle()
 
-        if (shopErr) {
-          console.error('Database error fetching shop:', shopErr)
-          return new Response(
-            JSON.stringify({ error: 'Database error fetching shop' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          )
-        }
-
-        if (!shopRow) {
-          console.error('Shop not found in database:', shopDomain)
-          return new Response(
-            JSON.stringify({ error: 'Shop not found. Please install the app first.' }),
-            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          )
-        }
-
-        if (!shopRow.access_token) {
-          console.error('No access token found for shop:', shopDomain)
-          return new Response(
-            JSON.stringify({ error: 'Access token missing. Please reinstall the app.' }),
-            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          )
-        }
-
-        token = shopRow.access_token
-        shopId = shopRow.id
-        console.log('Retrieved token from database, length:', token.length, 'for shop:', shopDomain)
-      } else {
-        console.log('Using provided token, length:', token.length)
-        // Fetch shop id for upserts
-        const { data: shopRow } = await supabaseClient
-          .from('shops')
-          .select('id')
-          .eq('shop_domain', shopDomain)
-          .maybeSingle()
-        shopId = shopRow?.id ?? null
+      if (shopErr) {
+        console.error('Database error fetching shop:', shopErr)
+        return new Response(
+          JSON.stringify({ error: 'Database error fetching shop' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
       }
+
+      if (!shopRow) {
+        console.error('Shop not found in database:', shopDomain)
+        return new Response(
+          JSON.stringify({ error: 'Shop not found. Please install the app first.' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (!shopRow.access_token) {
+        console.error('No access token found for shop:', shopDomain)
+        return new Response(
+          JSON.stringify({ error: 'Access token missing. Please reinstall the app.' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      token = shopRow.access_token
+      shopId = shopRow.id
+      console.log('Using stored token, length:', token.length, 'for shop:', shopDomain)
 
       // Validate token format
       if (!token || token.length < 10) {
@@ -102,6 +91,30 @@ serve(async (req) => {
           JSON.stringify({ error: 'Invalid access token format' }),
           { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
+      }
+
+      // Verify granted access scopes before making API calls
+      try {
+        const scopesResp = await fetch(`https://${shopDomain}/admin/oauth/access_scopes.json`, {
+          headers: { 'X-Shopify-Access-Token': token!, 'Content-Type': 'application/json' }
+        })
+        if (scopesResp.ok) {
+          const scopesJson = await scopesResp.json()
+          const granted: string[] = (scopesJson?.access_scopes || []).map((s: any) => s.handle)
+          console.log('Granted scopes:', granted)
+          const required = ['read_products','read_inventory']
+          const missing = required.filter(s => !granted.includes(s))
+          if (missing.length) {
+            return new Response(
+              JSON.stringify({ error: `Missing required scopes: ${missing.join(', ')}`, granted }),
+              { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+          }
+        } else {
+          console.warn('Failed to fetch access scopes:', scopesResp.status, scopesResp.statusText)
+        }
+      } catch (e) {
+        console.warn('Error checking access scopes:', (e as any)?.message || e)
       }
 
       console.log('Fetching products via GraphQL for shop:', shopDomain, 'with token prefix:', token.substring(0, 8) + '...')

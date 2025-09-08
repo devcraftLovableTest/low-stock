@@ -50,22 +50,42 @@ serve(async (req) => {
       let shopId: string | null = null
 
       if (!token) {
+        console.log('No token provided, fetching from database for shop:', shopDomain)
         const { data: shopRow, error: shopErr } = await supabaseClient
           .from('shops')
           .select('id, access_token')
           .eq('shop_domain', shopDomain)
           .maybeSingle()
 
-        if (shopErr || !shopRow) {
-          console.error('Failed to resolve shop token:', shopErr)
+        if (shopErr) {
+          console.error('Database error fetching shop:', shopErr)
           return new Response(
-            JSON.stringify({ error: 'Shop not found or token missing' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            JSON.stringify({ error: 'Database error fetching shop' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           )
         }
+
+        if (!shopRow) {
+          console.error('Shop not found in database:', shopDomain)
+          return new Response(
+            JSON.stringify({ error: 'Shop not found. Please install the app first.' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
+        if (!shopRow.access_token) {
+          console.error('No access token found for shop:', shopDomain)
+          return new Response(
+            JSON.stringify({ error: 'Access token missing. Please reinstall the app.' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+
         token = shopRow.access_token
         shopId = shopRow.id
+        console.log('Retrieved token from database, length:', token.length, 'for shop:', shopDomain)
       } else {
+        console.log('Using provided token, length:', token.length)
         // Fetch shop id for upserts
         const { data: shopRow } = await supabaseClient
           .from('shops')
@@ -75,7 +95,16 @@ serve(async (req) => {
         shopId = shopRow?.id ?? null
       }
 
-      console.log('Fetching products via GraphQL for shop:', shopDomain)
+      // Validate token format
+      if (!token || token.length < 10) {
+        console.error('Invalid token format, length:', token?.length || 0)
+        return new Response(
+          JSON.stringify({ error: 'Invalid access token format' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      console.log('Fetching products via GraphQL for shop:', shopDomain, 'with token prefix:', token.substring(0, 8) + '...')
 
       const gqlQuery = `
         query FetchProducts($first:Int!, $variantsFirst:Int!){
@@ -111,14 +140,50 @@ serve(async (req) => {
       })
 
       console.log('Shopify GraphQL response status:', shopifyResponse.status)
+      
+      if (!shopifyResponse.ok) {
+        const errorText = await shopifyResponse.text()
+        console.error('Shopify API HTTP error:', {
+          status: shopifyResponse.status,
+          statusText: shopifyResponse.statusText,
+          body: errorText
+        })
+        
+        if (shopifyResponse.status === 401) {
+          return new Response(
+            JSON.stringify({ error: 'Invalid or expired access token. Please reinstall the app.' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+        
+        return new Response(
+          JSON.stringify({ error: `Shopify API error: ${shopifyResponse.status} - ${errorText}` }),
+          { status: shopifyResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
 
-      const gql = await shopifyResponse.json().catch(async () => ({
-        parseError: await shopifyResponse.text()
-      }))
+      const gql = await shopifyResponse.json().catch(async (parseError) => {
+        console.error('JSON parsing error:', parseError)
+        const text = await shopifyResponse.text()
+        console.error('Response text:', text)
+        return { parseError: text }
+      })
 
-      if (!shopifyResponse.ok || (gql as any).errors) {
-        console.error('Shopify GraphQL error:', (gql as any).errors || (gql as any).parseError)
-        throw new Error(`Shopify API error: ${shopifyResponse.status}`)
+      if ((gql as any).errors) {
+        console.error('Shopify GraphQL errors:', (gql as any).errors)
+        const errorMessage = (gql as any).errors.map((e: any) => e.message).join(', ')
+        return new Response(
+          JSON.stringify({ error: `GraphQL errors: ${errorMessage}` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if ((gql as any).parseError) {
+        console.error('Response parsing error:', (gql as any).parseError)
+        return new Response(
+          JSON.stringify({ error: 'Invalid response from Shopify API' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
       }
 
       const edges = (gql as any).data?.products?.edges || []

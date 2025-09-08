@@ -51,7 +51,8 @@ serve(async (req) => {
         `client_id=${clientId}&` +
         `scope=${scopes}&` +
         `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-        `state=${state}`
+        `state=${state}&` +
+        `access_mode=offline`
 
       return new Response(JSON.stringify({ authUrl }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

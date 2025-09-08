@@ -119,8 +119,8 @@ serve(async (req) => {
                       id
                       sku
                       inventoryQuantity
-                      price { amount }
-                      compareAtPrice { amount }
+                      price
+                      compareAtPrice
                     }
                   }
                 }
@@ -205,8 +205,8 @@ serve(async (req) => {
         for (const vEdge of vEdges) {
           const variant = vEdge.node
           const variantId = extractNumericId(variant.id)
-          const priceAmount = variant.price?.amount ? parseFloat(variant.price.amount) : null
-          const compareAmount = variant.compareAtPrice?.amount ? parseFloat(variant.compareAtPrice.amount) : null
+          const priceAmount = variant.price ? parseFloat(variant.price) : null
+          const compareAmount = variant.compareAtPrice ? parseFloat(variant.compareAtPrice) : null
           const invQty = typeof variant.inventoryQuantity === 'number' ? variant.inventoryQuantity : 0
 
           const { error } = await supabaseClient

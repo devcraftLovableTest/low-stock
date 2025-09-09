@@ -109,6 +109,58 @@ serve(async (req) => {
         return new Response('Failed to obtain access token', { status: 400 })
       }
 
+      // Post-install: verify granted access scopes before proceeding
+      try {
+        const scopesResp = await fetch(`https://${shop}/admin/oauth/access_scopes.json`, {
+          headers: {
+            'X-Shopify-Access-Token': tokenData.access_token,
+            'Content-Type': 'application/json',
+          },
+        })
+
+        if (scopesResp.ok) {
+          const scopesJson = await scopesResp.json()
+          const granted: string[] = (scopesJson?.access_scopes || []).map((s: any) => s.handle)
+          console.log('Granted scopes after install:', granted)
+          const required = ['read_products', 'read_inventory']
+          const missing = required.filter((s) => !granted.includes(s))
+
+          if (missing.length) {
+            const msg = `Missing required scopes: ${missing.join(', ')}`
+            console.error(msg)
+
+            // Clean up state
+            await supabaseClient
+              .from('oauth_states')
+              .delete()
+              .eq('state', state)
+
+            // Redirect back with clear error message
+            try {
+              const url = new URL(returnUrl)
+              url.searchParams.set('installed', 'false')
+              url.searchParams.set('error', 'missing_scopes')
+              url.searchParams.set('message', msg)
+              url.searchParams.set('docs', 'https://shopify.dev/api/usage/access-scopes')
+
+              return new Response(null, {
+                status: 302,
+                headers: { 'Location': url.toString(), ...corsHeaders },
+              })
+            } catch (_) {
+              return new Response(
+                JSON.stringify({ error: 'missing_scopes', message: msg, granted }),
+                { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              )
+            }
+          }
+        } else {
+          console.warn('Failed to fetch access scopes:', scopesResp.status, scopesResp.statusText)
+        }
+      } catch (e) {
+        console.warn('Error checking access scopes:', (e as any)?.message || e)
+      }
+
       // Get shop information
       const shopInfoResponse = await fetch(`https://${shop}/admin/api/2025-07/shop.json`, {
         headers: {

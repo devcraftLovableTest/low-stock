@@ -288,18 +288,127 @@ serve(async (req) => {
 
     if (action === 'update-prices') {
       const { itemId, price, compareAtPrice } = requestBody
-      
-      const { error } = await supabaseClient
+
+      // 1) Look up the inventory item to get the Shopify variant id
+      const { data: itemRow, error: itemErr } = await supabaseClient
         .from('inventory_items')
-        .update({ 
-          price: price ? parseFloat(price) : null,
-          compare_at_price: compareAtPrice ? parseFloat(compareAtPrice) : null
+        .select('id, shopify_variant_id')
+        .eq('id', itemId)
+        .eq('shop_domain', shopDomain)
+        .maybeSingle()
+
+      if (itemErr) {
+        console.error('DB error fetching inventory item:', itemErr)
+        return new Response(
+          JSON.stringify({ error: 'Database error fetching inventory item' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (!itemRow || !itemRow.shopify_variant_id) {
+        return new Response(
+          JSON.stringify({ error: 'Inventory item or variant not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // 2) Resolve shop access token
+      const { data: shopRow, error: shopErr } = await supabaseClient
+        .from('shops')
+        .select('access_token')
+        .eq('shop_domain', shopDomain)
+        .maybeSingle()
+
+      if (shopErr || !shopRow?.access_token) {
+        console.error('DB error fetching shop or missing token:', shopErr)
+        return new Response(
+          JSON.stringify({ error: 'Missing access token. Please reinstall the app.' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const token = shopRow.access_token as string
+
+      // 3) Verify required scopes for updating products
+      try {
+        const scopesResp = await fetch(`https://${shopDomain}/admin/oauth/access_scopes.json`, {
+          headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' }
+        })
+        if (scopesResp.ok) {
+          const scopesJson = await scopesResp.json()
+          const granted: string[] = (scopesJson?.access_scopes || []).map((s: any) => s.handle)
+          const required = ['write_products']
+          const missing = required.filter(s => !granted.includes(s))
+          if (missing.length) {
+            return new Response(
+              JSON.stringify({ error: `Missing required scopes: ${missing.join(', ')}`, granted }),
+              { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            )
+          }
+        }
+      } catch (e) {
+        console.warn('Scope check error:', (e as any)?.message || e)
+      }
+
+      // 4) Push price changes to Shopify via GraphQL
+      const variantGid = `gid://shopify/ProductVariant/${itemRow.shopify_variant_id}`
+      const mutation = `
+        mutation UpdateVariant($input: ProductVariantInput!) {
+          productVariantUpdate(input: $input) {
+            productVariant { id price compareAtPrice }
+            userErrors { field message }
+          }
+        }
+      `
+
+      const input: Record<string, any> = { id: variantGid }
+      if (price !== undefined) input.price = String(price)
+      if (compareAtPrice !== undefined) input.compareAtPrice = String(compareAtPrice)
+
+      const shopifyResp = await fetch(`https://${shopDomain}/admin/api/2025-07/graphql.json`, {
+        method: 'POST',
+        headers: {
+          'X-Shopify-Access-Token': token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: mutation, variables: { input } })
+      })
+
+      if (!shopifyResp.ok) {
+        const body = await shopifyResp.text()
+        console.error('Shopify update HTTP error:', shopifyResp.status, body)
+        return new Response(
+          JSON.stringify({ error: `Shopify API error: ${shopifyResp.status}`, detail: body }),
+          { status: shopifyResp.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const result = await shopifyResp.json()
+      const userErrors = result?.data?.productVariantUpdate?.userErrors || []
+      if (userErrors.length) {
+        console.error('Shopify userErrors:', userErrors)
+        return new Response(
+          JSON.stringify({ error: 'Shopify validation error', userErrors }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // 5) Persist to our DB after successful Shopify update
+      const { error: updErr } = await supabaseClient
+        .from('inventory_items')
+        .update({
+          price: price !== undefined && price !== null && `${price}` !== '' ? parseFloat(price) : null,
+          compare_at_price: compareAtPrice !== undefined && compareAtPrice !== null && `${compareAtPrice}` !== '' ? parseFloat(compareAtPrice) : null,
         })
         .eq('id', itemId)
         .eq('shop_domain', shopDomain)
 
-      if (error) {
-        throw error
+      if (updErr) {
+        console.error('DB error updating local prices:', updErr)
+        return new Response(
+          JSON.stringify({ error: 'Database error updating prices after Shopify update' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
       }
 
       return new Response(

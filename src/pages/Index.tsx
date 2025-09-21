@@ -1,10 +1,14 @@
 import ShopifyAppStatus from "@/components/ShopifyAppStatus";
 import ShopifyAppProvider from "@/components/ShopifyAppProvider";
 
-const Index = () => {
+interface IndexProps {
+  isBulkActionsPage?: boolean;
+}
+
+const Index = ({ isBulkActionsPage = false }: IndexProps) => {
   return (
     <ShopifyAppProvider>
-      <ShopifyAppStatus />
+      <ShopifyAppStatus isBulkActionsPage={isBulkActionsPage} />
     </ShopifyAppProvider>
   );
 };

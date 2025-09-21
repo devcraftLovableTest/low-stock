@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import ShopifyInstallation from './ShopifyInstallation';
 import ProductsDashboard from './ProductsDashboard';
+import BulkActions from '../pages/BulkActions';
 import { Banner, Layout, Spinner } from '@shopify/polaris';
 import createApp from '@shopify/app-bridge';
 import { Redirect } from '@shopify/app-bridge/actions';
@@ -14,7 +15,11 @@ interface Shop {
   installed_at: string;
 }
 
-const ShopifyAppStatus: React.FC = () => {
+interface ShopifyAppStatusProps {
+  isBulkActionsPage?: boolean;
+}
+
+const ShopifyAppStatus: React.FC<ShopifyAppStatusProps> = ({ isBulkActionsPage = false }) => {
   const [loading, setLoading] = useState(true);
   const [shop, setShop] = useState<Shop | null>(null);
   const [error, setError] = useState('');
@@ -132,7 +137,7 @@ const ShopifyAppStatus: React.FC = () => {
     return <ShopifyInstallation onInstall={handleInstall} />;
   }
 
-  return <ProductsDashboard shop={shop} />;
+  return isBulkActionsPage ? <BulkActions shop={shop} /> : <ProductsDashboard shop={shop} />;
 };
 
 export default ShopifyAppStatus;

@@ -42,7 +42,9 @@ const ProductsDashboard: React.FC<ProductsDashboardProps> = ({ shop }) => {
   const [syncing, setSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [editingPrices, setEditingPrices] = useState<{[key: string]: {price: string, comparePrice: string}}>({});
+  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkPricing, setBulkPricing] = useState({ price: '', comparePrice: '', actionName: '' });
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
 
@@ -112,19 +114,32 @@ const ProductsDashboard: React.FC<ProductsDashboardProps> = ({ shop }) => {
     }
   };
 
-  const handlePriceEdit = (itemId: string, field: 'price' | 'comparePrice', value: string) => {
-    setEditingPrices(prev => ({
-      ...prev,
-      [itemId]: {
-        ...prev[itemId],
-        [field]: value
+  const toggleProductSelection = (productId: string) => {
+    setSelectedProducts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(productId)) {
+        newSet.delete(productId);
+      } else {
+        newSet.add(productId);
       }
-    }));
+      return newSet;
+    });
   };
 
-  const savePriceChanges = async (itemId: string) => {
-    const edits = editingPrices[itemId];
-    if (!edits) return;
+  const selectAllProducts = () => {
+    setSelectedProducts(new Set(filteredProducts.map(p => p.id)));
+  };
+
+  const deselectAllProducts = () => {
+    setSelectedProducts(new Set());
+  };
+
+  const applyBulkPricing = async () => {
+    if (selectedProducts.size === 0 || !bulkPricing.actionName.trim()) {
+      setToastMessage('Please select products and provide an action name');
+      setShowToast(true);
+      return;
+    }
 
     try {
       const response = await fetch('https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-api', {
@@ -133,49 +148,43 @@ const ProductsDashboard: React.FC<ProductsDashboardProps> = ({ shop }) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          action: 'update-prices',
+          action: 'bulk-update-prices',
           shopDomain: shop.shop_domain,
-          itemId,
-          price: edits.price,
-          compareAtPrice: edits.comparePrice,
+          productIds: Array.from(selectedProducts),
+          price: bulkPricing.price,
+          compareAtPrice: bulkPricing.comparePrice,
+          actionName: bulkPricing.actionName,
         }),
       });
 
       if (response.ok) {
-        // Update local state
-        setProducts(prev => prev.map(product => 
-          product.id === itemId 
-            ? { 
-                ...product, 
-                price: edits.price ? parseFloat(edits.price) : null,
-                compare_at_price: edits.comparePrice ? parseFloat(edits.comparePrice) : null
-              }
-            : product
-        ));
+        const result = await response.json();
         
-        // Clear editing state
-        setEditingPrices(prev => {
-          const newState = { ...prev };
-          delete newState[itemId];
-          return newState;
-        });
+        // Update local state
+        setProducts(prev => prev.map(product => {
+          if (selectedProducts.has(product.id)) {
+            return {
+              ...product, 
+              price: bulkPricing.price ? parseFloat(bulkPricing.price) : product.price,
+              compare_at_price: bulkPricing.comparePrice ? parseFloat(bulkPricing.comparePrice) : product.compare_at_price
+            };
+          }
+          return product;
+        }));
+        
+        // Reset bulk state
+        setSelectedProducts(new Set());
+        setBulkPricing({ price: '', comparePrice: '', actionName: '' });
+        setBulkMode(false);
 
-        setToastMessage('Prices updated successfully!');
+        setToastMessage(`Bulk action "${bulkPricing.actionName}" applied to ${selectedProducts.size} products`);
         setShowToast(true);
       }
     } catch (error) {
-      console.error('Error updating prices:', error);
-      setToastMessage('Error updating prices');
+      console.error('Error applying bulk pricing:', error);
+      setToastMessage('Error applying bulk pricing');
       setShowToast(true);
     }
-  };
-
-  const cancelPriceEdit = (itemId: string) => {
-    setEditingPrices(prev => {
-      const newState = { ...prev };
-      delete newState[itemId];
-      return newState;
-    });
   };
 
   const filteredProducts = products.filter(product => {
@@ -186,64 +195,25 @@ const ProductsDashboard: React.FC<ProductsDashboardProps> = ({ shop }) => {
   });
 
   const rows = filteredProducts.map((product) => {
-    const editing = editingPrices[product.id];
-    const isEditing = !!editing;
+    const isSelected = selectedProducts.has(product.id);
 
     return [
-      product.title,
-      product.sku || '-',
-      isEditing ? (
-        <TextField
-          label=""
-          labelHidden
-          value={editing.price || product.price?.toString() || ''}
-          onChange={(value) => handlePriceEdit(product.id, 'price', value)}
-          prefix="$"
-          type="number"
-          autoComplete="off"
+      bulkMode ? (
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => toggleProductSelection(product.id)}
+          style={{ transform: 'scale(1.2)' }}
         />
       ) : (
-        product.price ? `$${product.price.toFixed(2)}` : '-'
+        product.title
       ),
-      isEditing ? (
-        <TextField
-          label=""
-          labelHidden
-          value={editing.comparePrice || product.compare_at_price?.toString() || ''}
-          onChange={(value) => handlePriceEdit(product.id, 'comparePrice', value)}
-          prefix="$"
-          type="number"
-          autoComplete="off"
-        />
-      ) : (
-        product.compare_at_price ? `$${product.compare_at_price.toFixed(2)}` : '-'
-      ),
-      product.inventory_quantity || 0,
-      isEditing ? (
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <Button 
-            size="slim" 
-            variant="primary" 
-            onClick={() => savePriceChanges(product.id)}
-          >
-            Save
-          </Button>
-          <Button 
-            size="slim" 
-            onClick={() => cancelPriceEdit(product.id)}
-          >
-            Cancel
-          </Button>
-        </div>
-      ) : (
-        <Button 
-          size="slim" 
-          onClick={() => handlePriceEdit(product.id, 'price', product.price?.toString() || '')}
-        >
-          Edit Prices
-        </Button>
-      )
-    ];
+      bulkMode ? product.title : (product.sku || '-'),
+      bulkMode ? (product.sku || '-') : (product.price ? `$${product.price.toFixed(2)}` : '-'),
+      bulkMode ? (product.price ? `$${product.price.toFixed(2)}` : '-') : (product.compare_at_price ? `$${product.compare_at_price.toFixed(2)}` : '-'),
+      bulkMode ? (product.compare_at_price ? `$${product.compare_at_price.toFixed(2)}` : '-') : (product.inventory_quantity || 0),
+      bulkMode ? (product.inventory_quantity || 0) : null
+    ].filter(item => item !== null);
   });
 
   if (loading) {
@@ -283,6 +253,20 @@ const ProductsDashboard: React.FC<ProductsDashboardProps> = ({ shop }) => {
           loading: syncing,
           onAction: syncWithShopify,
         }}
+        secondaryActions={[
+          {
+            content: bulkMode ? 'Exit Bulk Mode' : 'Bulk Pricing',
+            onAction: () => {
+              setBulkMode(!bulkMode);
+              setSelectedProducts(new Set());
+              setBulkPricing({ price: '', comparePrice: '', actionName: '' });
+            },
+          },
+          {
+            content: 'Bulk Actions History',
+            onAction: () => window.location.href = '/bulk-actions',
+          }
+        ]}
       >
         <Layout>
           <Layout.Section>
@@ -346,9 +330,74 @@ const ProductsDashboard: React.FC<ProductsDashboardProps> = ({ shop }) => {
                 </div>
               </div>
 
+              {bulkMode && (
+                <div style={{ 
+                  marginBottom: '16px', 
+                  padding: '16px', 
+                  backgroundColor: '#f8f9fa', 
+                  borderRadius: '8px',
+                  border: '1px solid #e1e5e9'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
+                    <Button size="slim" onClick={selectAllProducts}>Select All</Button>
+                    <Button size="slim" onClick={deselectAllProducts}>Deselect All</Button>
+                    <span style={{ fontWeight: 'bold', color: '#6B7280' }}>
+                      {selectedProducts.size} product{selectedProducts.size !== 1 ? 's' : ''} selected
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'end' }}>
+                    <div style={{ flex: 1 }}>
+                      <TextField
+                        label="Action Name"
+                        value={bulkPricing.actionName}
+                        onChange={(value) => setBulkPricing(prev => ({ ...prev, actionName: value }))}
+                        placeholder="e.g., Holiday Sale 2024"
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div style={{ width: '150px' }}>
+                      <TextField
+                        label="New Price"
+                        value={bulkPricing.price}
+                        onChange={(value) => setBulkPricing(prev => ({ ...prev, price: value }))}
+                        prefix="$"
+                        type="number"
+                        placeholder="Optional"
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div style={{ width: '150px' }}>
+                      <TextField
+                        label="Compare At Price"
+                        value={bulkPricing.comparePrice}
+                        onChange={(value) => setBulkPricing(prev => ({ ...prev, comparePrice: value }))}
+                        prefix="$"
+                        type="number"
+                        placeholder="Optional"
+                        autoComplete="off"
+                      />
+                    </div>
+                    <Button 
+                      variant="primary" 
+                      onClick={applyBulkPricing}
+                      disabled={selectedProducts.size === 0 || !bulkPricing.actionName.trim()}
+                    >
+                      Apply Bulk Changes
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               <DataTable
-                columnContentTypes={['text', 'text', 'text', 'text', 'numeric', 'text']}
-                headings={['Product', 'SKU', 'Price', 'Compare At Price', 'Stock', 'Actions']}
+                columnContentTypes={bulkMode 
+                  ? ['text', 'text', 'text', 'text', 'text', 'numeric'] 
+                  : ['text', 'text', 'text', 'text', 'numeric']
+                }
+                headings={bulkMode 
+                  ? ['Select', 'Product', 'SKU', 'Price', 'Compare At Price', 'Stock'] 
+                  : ['Product', 'SKU', 'Price', 'Compare At Price', 'Stock']
+                }
                 rows={rows}
               />
             </Card>

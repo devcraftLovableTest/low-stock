@@ -14,6 +14,93 @@ export type Database = {
   }
   public: {
     Tables: {
+      bulk_action_items: {
+        Row: {
+          bulk_action_id: string
+          created_at: string
+          id: string
+          inventory_item_id: string
+          new_compare_at_price: number | null
+          new_price: number | null
+          original_compare_at_price: number | null
+          original_price: number | null
+        }
+        Insert: {
+          bulk_action_id: string
+          created_at?: string
+          id?: string
+          inventory_item_id: string
+          new_compare_at_price?: number | null
+          new_price?: number | null
+          original_compare_at_price?: number | null
+          original_price?: number | null
+        }
+        Update: {
+          bulk_action_id?: string
+          created_at?: string
+          id?: string
+          inventory_item_id?: string
+          new_compare_at_price?: number | null
+          new_price?: number | null
+          original_compare_at_price?: number | null
+          original_price?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bulk_action_items_bulk_action_id_fkey"
+            columns: ["bulk_action_id"]
+            isOneToOne: false
+            referencedRelation: "bulk_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulk_action_items_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bulk_actions: {
+        Row: {
+          action_name: string
+          action_type: string
+          created_at: string
+          created_by: string | null
+          id: string
+          new_compare_at_price: number | null
+          new_price: number | null
+          product_count: number | null
+          reverted_at: string | null
+          shop_domain: string
+        }
+        Insert: {
+          action_name: string
+          action_type?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          new_compare_at_price?: number | null
+          new_price?: number | null
+          product_count?: number | null
+          reverted_at?: string | null
+          shop_domain: string
+        }
+        Update: {
+          action_name?: string
+          action_type?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          new_compare_at_price?: number | null
+          new_price?: number | null
+          product_count?: number | null
+          reverted_at?: string | null
+          shop_domain?: string
+        }
+        Relationships: []
+      }
       inventory_alerts: {
         Row: {
           alert_type: string

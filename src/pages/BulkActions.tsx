@@ -108,7 +108,12 @@ const BulkActions: React.FC<BulkActionsProps> = ({ shop }) => {
   };
 
   const rows = bulkActions.map((action) => [
-    action.action_name,
+    <Button 
+      variant="plain" 
+      onClick={() => window.location.href = `/bulk-actions/${action.id}`}
+    >
+      {action.action_name}
+    </Button>,
     action.new_price ? `$${action.new_price.toFixed(2)}` : '-',
     action.new_compare_at_price ? `$${action.new_compare_at_price.toFixed(2)}` : '-',
     action.product_count.toString(),
@@ -118,13 +123,13 @@ const BulkActions: React.FC<BulkActionsProps> = ({ shop }) => {
         Reverted on {formatDate(action.reverted_at)}
       </span>
     ) : (
-          <Button 
-            size="slim" 
-            variant="primary"
-            onClick={() => revertBulkAction(action.id)}
-          >
-            Revert to Original
-          </Button>
+      <Button 
+        size="slim" 
+        variant="primary"
+        onClick={() => revertBulkAction(action.id)}
+      >
+        Revert to Original
+      </Button>
     )
   ]);
 
@@ -161,6 +166,10 @@ const BulkActions: React.FC<BulkActionsProps> = ({ shop }) => {
       <Page 
         title="Bulk Actions History"
         backAction={{content: 'Products', onAction: () => window.location.href = '/'}}
+        primaryAction={{
+          content: 'Create New Bulk Action',
+          onAction: () => window.location.href = '/bulk-actions/create'
+        }}
       >
         <Layout>
           <Layout.Section>

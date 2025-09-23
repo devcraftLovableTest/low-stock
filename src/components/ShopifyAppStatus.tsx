@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import ShopifyInstallation from './ShopifyInstallation';
 import ProductsDashboard from './ProductsDashboard';
 import BulkActions from '../pages/BulkActions';
+import CreateBulkAction from '../pages/CreateBulkAction';
+import BulkActionDetail from '../pages/BulkActionDetail';
 import { Banner, Layout, Spinner } from '@shopify/polaris';
 import createApp from '@shopify/app-bridge';
 import { Redirect } from '@shopify/app-bridge/actions';
@@ -17,9 +19,15 @@ interface Shop {
 
 interface ShopifyAppStatusProps {
   isBulkActionsPage?: boolean;
+  isCreateBulkActionPage?: boolean;
+  isBulkActionDetailPage?: boolean;
 }
 
-const ShopifyAppStatus: React.FC<ShopifyAppStatusProps> = ({ isBulkActionsPage = false }) => {
+const ShopifyAppStatus: React.FC<ShopifyAppStatusProps> = ({ 
+  isBulkActionsPage = false,
+  isCreateBulkActionPage = false,
+  isBulkActionDetailPage = false 
+}) => {
   const [loading, setLoading] = useState(true);
   const [shop, setShop] = useState<Shop | null>(null);
   const [error, setError] = useState('');
@@ -137,7 +145,21 @@ const ShopifyAppStatus: React.FC<ShopifyAppStatusProps> = ({ isBulkActionsPage =
     return <ShopifyInstallation onInstall={handleInstall} />;
   }
 
-  return isBulkActionsPage ? <BulkActions shop={shop} /> : <ProductsDashboard shop={shop} />;
+  if (isBulkActionsPage) {
+    return <BulkActions shop={shop} />;
+  }
+  
+  if (isCreateBulkActionPage) {
+    return <CreateBulkAction shop={shop} />;
+  }
+  
+  if (isBulkActionDetailPage) {
+    const pathParts = window.location.pathname.split('/');
+    const bulkActionId = pathParts[pathParts.length - 1];
+    return <BulkActionDetail shop={shop} bulkActionId={bulkActionId} />;
+  }
+  
+  return <ProductsDashboard shop={shop} />;
 };
 
 export default ShopifyAppStatus;

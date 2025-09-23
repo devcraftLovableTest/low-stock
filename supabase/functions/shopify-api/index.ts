@@ -50,6 +50,10 @@ serve(async (req) => {
         return handleBulkUpdatePrices(supabase, requestBody, shopDomain);
       case 'revert-bulk-action':
         return handleRevertBulkAction(supabase, requestBody, shopDomain);
+      case 'fetch-collections':
+        return handleFetchCollections(supabase, requestBody, shopDomain);
+      case 'fetch-collection-products':
+        return handleFetchCollectionProducts(supabase, requestBody, shopDomain);
       default:
         return new Response(
           JSON.stringify({ error: 'Invalid action' }),
@@ -583,4 +587,152 @@ async function handleRevertBulkAction(supabase: any, requestBody: any, shopDomai
     JSON.stringify({ success: true }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
+}
+
+async function handleFetchCollections(supabase: any, requestBody: any, shopDomain: string) {
+  if (!shopDomain) {
+    return new Response(
+      JSON.stringify({ error: 'Missing shopDomain' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Get shop access token from DB
+  const { data: shopRow, error: shopErr } = await supabase
+    .from('shops')
+    .select('access_token')
+    .eq('shop_domain', shopDomain)
+    .maybeSingle();
+
+  if (shopErr || !shopRow) {
+    return new Response(
+      JSON.stringify({ error: 'Shop not found' }),
+      { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const accessToken = shopRow.access_token;
+
+  const collectionsQuery = `
+    query {
+      collections(first: 250) {
+        edges {
+          node {
+            id
+            title
+            handle
+            productsCount
+          }
+        }
+      }
+    }
+  `;
+  
+  const collectionsResponse = await fetch(`https://${shopDomain}/admin/api/2023-10/graphql.json`, {
+    method: 'POST',
+    headers: {
+      'X-Shopify-Access-Token': accessToken,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query: collectionsQuery }),
+  });
+  
+  if (!collectionsResponse.ok) {
+    return new Response(
+      JSON.stringify({ error: 'Failed to fetch collections from Shopify' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+  
+  const collectionsData = await collectionsResponse.json();
+  
+  return new Response(JSON.stringify({
+    collections: collectionsData.data?.collections?.edges?.map((edge: any) => ({
+      id: edge.node.id,
+      title: edge.node.title,
+      handle: edge.node.handle,
+      products_count: edge.node.productsCount
+    })) || []
+  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+}
+
+async function handleFetchCollectionProducts(supabase: any, requestBody: any, shopDomain: string) {
+  const { collectionId } = requestBody;
+
+  if (!shopDomain || !collectionId) {
+    return new Response(
+      JSON.stringify({ error: 'Missing shopDomain or collectionId' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Get shop access token from DB
+  const { data: shopRow, error: shopErr } = await supabase
+    .from('shops')
+    .select('access_token')
+    .eq('shop_domain', shopDomain)
+    .maybeSingle();
+
+  if (shopErr || !shopRow) {
+    return new Response(
+      JSON.stringify({ error: 'Shop not found' }),
+      { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  const accessToken = shopRow.access_token;
+
+  const collectionProductsQuery = `
+    query {
+      collection(id: "${collectionId}") {
+        products(first: 250) {
+          edges {
+            node {
+              id
+              variants(first: 1) {
+                edges {
+                  node {
+                    id
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+  
+  const collectionProductsResponse = await fetch(`https://${shopDomain}/admin/api/2023-10/graphql.json`, {
+    method: 'POST',
+    headers: {
+      'X-Shopify-Access-Token': accessToken,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query: collectionProductsQuery }),
+  });
+  
+  if (!collectionProductsResponse.ok) {
+    return new Response(
+      JSON.stringify({ error: 'Failed to fetch collection products from Shopify' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+  
+  const collectionProductsData = await collectionProductsResponse.json();
+  
+  // Get the inventory item IDs from our database for these products
+  const shopifyProductIds = collectionProductsData.data?.collection?.products?.edges?.map((edge: any) => 
+    edge.node.id.replace('gid://shopify/Product/', '')
+  ) || [];
+  
+  const { data: inventoryItems } = await supabase
+    .from('inventory_items')
+    .select('id')
+    .eq('shop_domain', shopDomain)
+    .in('shopify_product_id', shopifyProductIds);
+  
+  return new Response(JSON.stringify({
+    products: inventoryItems || []
+  }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }

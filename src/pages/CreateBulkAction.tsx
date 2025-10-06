@@ -54,7 +54,11 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
   const [bulkPricing, setBulkPricing] = useState({ 
     price: '', 
     comparePrice: '', 
-    actionName: '' 
+    actionName: '',
+    adjustmentType: 'fixed', // 'fixed' or 'percentage'
+    adjustmentDirection: 'increase', // 'increase' or 'decrease'
+    adjustmentValue: '',
+    adjustmentTarget: 'price' // 'price' or 'compare_price' or 'both'
   });
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
@@ -191,8 +195,8 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
       return;
     }
 
-    if (!bulkPricing.price && !bulkPricing.comparePrice) {
-      setToastMessage('Please enter at least one price');
+    if (!bulkPricing.adjustmentValue || parseFloat(bulkPricing.adjustmentValue) === 0) {
+      setToastMessage('Please enter an adjustment value');
       setShowToast(true);
       return;
     }
@@ -200,17 +204,53 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
     setCreating(true);
 
     try {
+      // Calculate new prices based on adjustment settings
+      const selectedProductsData = products.filter(p => selectedProducts.has(p.id));
+      const priceUpdates = selectedProductsData.map(product => {
+        const adjustmentValue = parseFloat(bulkPricing.adjustmentValue);
+        let newPrice = product.price;
+        let newComparePrice = product.compare_at_price;
+
+        const calculateNewPrice = (currentPrice: number | null) => {
+          if (!currentPrice) return null;
+          
+          let adjustedPrice = currentPrice;
+          if (bulkPricing.adjustmentType === 'percentage') {
+            const multiplier = bulkPricing.adjustmentDirection === 'increase' 
+              ? (1 + adjustmentValue / 100) 
+              : (1 - adjustmentValue / 100);
+            adjustedPrice = currentPrice * multiplier;
+          } else {
+            adjustedPrice = bulkPricing.adjustmentDirection === 'increase'
+              ? currentPrice + adjustmentValue
+              : currentPrice - adjustmentValue;
+          }
+          return Math.max(0, adjustedPrice); // Ensure price doesn't go negative
+        };
+
+        if (bulkPricing.adjustmentTarget === 'price' || bulkPricing.adjustmentTarget === 'both') {
+          newPrice = calculateNewPrice(product.price);
+        }
+        if (bulkPricing.adjustmentTarget === 'compare_price' || bulkPricing.adjustmentTarget === 'both') {
+          newComparePrice = calculateNewPrice(product.compare_at_price);
+        }
+
+        return {
+          productId: product.id,
+          newPrice,
+          newComparePrice
+        };
+      });
+
       const response = await fetch('https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-api', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          action: 'bulk-update-prices',
+          action: 'bulk-update-prices-calculated',
           shopDomain: shop.shop_domain,
-          productIds: Array.from(selectedProducts),
-          newPrice: bulkPricing.price ? parseFloat(bulkPricing.price) : null,
-          newComparePrice: bulkPricing.comparePrice ? parseFloat(bulkPricing.comparePrice) : null,
+          priceUpdates,
           actionName: bulkPricing.actionName.trim(),
         }),
       });
@@ -221,7 +261,15 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
         // Reset form
         setSelectedProducts(new Set());
         setSelectedCollections(new Set());
-        setBulkPricing({ price: '', comparePrice: '', actionName: '' });
+        setBulkPricing({ 
+          price: '', 
+          comparePrice: '', 
+          actionName: '',
+          adjustmentType: 'fixed',
+          adjustmentDirection: 'increase',
+          adjustmentValue: '',
+          adjustmentTarget: 'price'
+        });
         // Navigate back to bulk actions list
         setTimeout(() => {
           window.location.href = '/bulk-actions';
@@ -307,24 +355,52 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
                   
                   <div style={{ display: 'flex', gap: '16px' }}>
                     <div style={{ flex: 1 }}>
+                      <Select
+                        label="Adjustment Type"
+                        options={[
+                          {label: 'Fixed Amount ($)', value: 'fixed'},
+                          {label: 'Percentage (%)', value: 'percentage'},
+                        ]}
+                        value={bulkPricing.adjustmentType}
+                        onChange={(value) => setBulkPricing({...bulkPricing, adjustmentType: value})}
+                      />
+                    </div>
+                    
+                    <div style={{ flex: 1 }}>
+                      <Select
+                        label="Direction"
+                        options={[
+                          {label: 'Increase', value: 'increase'},
+                          {label: 'Decrease', value: 'decrease'},
+                        ]}
+                        value={bulkPricing.adjustmentDirection}
+                        onChange={(value) => setBulkPricing({...bulkPricing, adjustmentDirection: value})}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '16px' }}>
+                    <div style={{ flex: 1 }}>
                       <TextField
-                        label="New Price ($)"
-                        value={bulkPricing.price}
-                        onChange={(value) => setBulkPricing({...bulkPricing, price: value})}
+                        label={`${bulkPricing.adjustmentDirection === 'increase' ? 'Increase' : 'Decrease'} by ${bulkPricing.adjustmentType === 'percentage' ? '(%)' : '($)'}`}
+                        value={bulkPricing.adjustmentValue}
+                        onChange={(value) => setBulkPricing({...bulkPricing, adjustmentValue: value})}
                         type="number"
-                        placeholder="0.00"
+                        placeholder={bulkPricing.adjustmentType === 'percentage' ? '10' : '5.00'}
                         autoComplete="off"
                       />
                     </div>
                     
                     <div style={{ flex: 1 }}>
-                      <TextField
-                        label="New Compare At Price ($)"
-                        value={bulkPricing.comparePrice}
-                        onChange={(value) => setBulkPricing({...bulkPricing, comparePrice: value})}
-                        type="number"
-                        placeholder="0.00"
-                        autoComplete="off"
+                      <Select
+                        label="Apply To"
+                        options={[
+                          {label: 'Price Only', value: 'price'},
+                          {label: 'Compare At Price Only', value: 'compare_price'},
+                          {label: 'Both Prices', value: 'both'},
+                        ]}
+                        value={bulkPricing.adjustmentTarget}
+                        onChange={(value) => setBulkPricing({...bulkPricing, adjustmentTarget: value})}
                       />
                     </div>
                   </div>
@@ -388,7 +464,7 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
                       variant="primary" 
                       loading={creating}
                       onClick={createBulkAction}
-                      disabled={selectedProducts.size === 0 || !bulkPricing.actionName.trim()}
+                      disabled={selectedProducts.size === 0 || !bulkPricing.actionName.trim() || !bulkPricing.adjustmentValue}
                     >
                       Create Bulk Action
                     </Button>

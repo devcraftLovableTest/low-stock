@@ -48,6 +48,8 @@ serve(async (req) => {
         return handleUpdatePrices(supabase, requestBody, shopDomain);
       case 'bulk-update-prices':
         return handleBulkUpdatePrices(supabase, requestBody, shopDomain);
+      case 'bulk-update-prices-calculated':
+        return handleBulkUpdatePricesCalculated(supabase, requestBody, shopDomain);
       case 'revert-bulk-action':
         return handleRevertBulkAction(supabase, requestBody, shopDomain);
       case 'fetch-collections':
@@ -470,6 +472,143 @@ async function handleBulkUpdatePrices(supabase: any, requestBody: any, shopDomai
     const updateData: any = {};
     if (price) updateData.price = parseFloat(price);
     if (compareAtPrice) updateData.compare_at_price = parseFloat(compareAtPrice);
+
+    if (Object.keys(updateData).length > 0) {
+      await supabase
+        .from('inventory_items')
+        .update(updateData)
+        .eq('id', product.id);
+    }
+  });
+
+  await Promise.all(updatePromises);
+
+  return new Response(
+    JSON.stringify({ success: true, bulkActionId: bulkAction.id }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
+}
+
+async function handleBulkUpdatePricesCalculated(supabase: any, requestBody: any, shopDomain: string) {
+  const { priceUpdates, actionName } = requestBody
+
+  if (!priceUpdates || priceUpdates.length === 0 || !actionName) {
+    return new Response(
+      JSON.stringify({ error: 'Price updates and action name are required' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Get shop access token
+  const { data: shopData } = await supabase
+    .from('shops')
+    .select('access_token')
+    .eq('shop_domain', shopDomain)
+    .single();
+
+  if (!shopData) {
+    return new Response(
+      JSON.stringify({ error: 'Shop not found' }),
+      { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Create bulk action record
+  const { data: bulkAction, error: bulkActionError } = await supabase
+    .from('bulk_actions')
+    .insert({
+      shop_domain: shopDomain,
+      action_name: actionName,
+      new_price: null, // Calculated prices vary per product
+      new_compare_at_price: null,
+      product_count: priceUpdates.length
+    })
+    .select()
+    .single();
+
+  if (bulkActionError) {
+    console.error('Error creating bulk action:', bulkActionError);
+    return new Response(
+      JSON.stringify({ error: 'Failed to create bulk action' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Get products with their current prices
+  const productIds = priceUpdates.map((u: any) => u.productId);
+  const { data: products } = await supabase
+    .from('inventory_items')
+    .select('*')
+    .in('id', productIds)
+    .eq('shop_domain', shopDomain);
+
+  if (!products) {
+    return new Response(
+      JSON.stringify({ error: 'Products not found' }),
+      { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Update each product with calculated prices
+  const updatePromises = priceUpdates.map(async (update: any) => {
+    const product = products.find((p: any) => p.id === update.productId);
+    if (!product) return;
+
+    const newPrice = update.newPrice;
+    const newComparePrice = update.newComparePrice;
+
+    // Save original prices in bulk_action_items
+    await supabase
+      .from('bulk_action_items')
+      .insert({
+        bulk_action_id: bulkAction.id,
+        inventory_item_id: product.id,
+        original_price: product.price,
+        original_compare_at_price: product.compare_at_price,
+        new_price: newPrice,
+        new_compare_at_price: newComparePrice
+      });
+
+    // Update Shopify if we have variant ID
+    if (product.shopify_variant_id && (newPrice !== null || newComparePrice !== null)) {
+      const mutation = `
+        mutation productVariantUpdate($input: ProductVariantInput!) {
+          productVariantUpdate(input: $input) {
+            productVariant {
+              id
+              price
+              compareAtPrice
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+
+      const variables = {
+        input: {
+          id: `gid://shopify/ProductVariant/${product.shopify_variant_id}`,
+          ...(newPrice !== null && { price: newPrice.toString() }),
+          ...(newComparePrice !== null && { compareAtPrice: newComparePrice.toString() })
+        }
+      };
+
+      await fetch(`https://${shopDomain}/admin/api/2023-10/graphql.json`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shopify-Access-Token': shopData.access_token,
+        },
+        body: JSON.stringify({ query: mutation, variables }),
+      });
+    }
+
+    // Update local database
+    const updateData: any = {};
+    if (newPrice !== null) updateData.price = newPrice;
+    if (newComparePrice !== null) updateData.compare_at_price = newComparePrice;
 
     if (Object.keys(updateData).length > 0) {
       await supabase

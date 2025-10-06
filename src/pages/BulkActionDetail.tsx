@@ -11,6 +11,7 @@ import {
   Frame,
   Badge
 } from '@shopify/polaris';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from "@/integrations/supabase/client";
 
 interface BulkActionItem {
@@ -47,6 +48,7 @@ interface BulkActionDetailProps {
 }
 
 const BulkActionDetail: React.FC<BulkActionDetailProps> = ({ shop, bulkActionId }) => {
+  const navigate = useNavigate();
   const [bulkAction, setBulkAction] = useState<BulkAction | null>(null);
   const [bulkActionItems, setBulkActionItems] = useState<BulkActionItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -210,7 +212,7 @@ const BulkActionDetail: React.FC<BulkActionDetailProps> = ({ shop, bulkActionId 
     <Frame>
       <Page 
         title={bulkAction.action_name}
-        backAction={{content: 'Back to Bulk Actions', onAction: () => window.location.href = '/bulk-actions'}}
+        backAction={{content: 'Back to Bulk Actions', onAction: () => navigate('/bulk-actions')}}
         primaryAction={
           !bulkAction.reverted_at ? {
             content: 'Revert to Original Prices',

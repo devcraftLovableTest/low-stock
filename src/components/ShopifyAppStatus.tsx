@@ -39,11 +39,13 @@ const ShopifyAppStatus: React.FC<ShopifyAppStatusProps> = ({
 
   const checkInstallationStatus = async () => {
     try {
-      // Get shop domain from URL parameters (when redirected back from Shopify)
+      // Get shop domain from URL parameters, host, or localStorage
       const urlParams = new URLSearchParams(window.location.search);
-      const shopDomain = urlParams.get('shop') || getShopDomainFromHost();
+      const shopDomain = urlParams.get('shop') || getShopDomainFromHost() || localStorage.getItem('shop_domain');
       
       if (shopDomain) {
+        // Store shop domain in localStorage for persistence
+        localStorage.setItem('shop_domain', shopDomain);
         // Check if shop is installed in our database
         const { data, error } = await supabase
           .from('shops')

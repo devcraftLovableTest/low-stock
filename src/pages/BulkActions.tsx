@@ -10,6 +10,7 @@ import {
   Toast,
   Frame
 } from '@shopify/polaris';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from "@/integrations/supabase/client";
 
 interface BulkAction {
@@ -34,6 +35,7 @@ interface BulkActionsProps {
 }
 
 const BulkActions: React.FC<BulkActionsProps> = ({ shop }) => {
+  const navigate = useNavigate();
   const [bulkActions, setBulkActions] = useState<BulkAction[]>([]);
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState('');
@@ -110,7 +112,7 @@ const BulkActions: React.FC<BulkActionsProps> = ({ shop }) => {
   const rows = bulkActions.map((action) => [
     <Button 
       variant="plain" 
-      onClick={() => window.location.href = `/bulk-actions/${action.id}`}
+      onClick={() => navigate(`/bulk-actions/${action.id}`)}
     >
       {action.action_name}
     </Button>,
@@ -165,10 +167,10 @@ const BulkActions: React.FC<BulkActionsProps> = ({ shop }) => {
     <Frame>
       <Page 
         title="Bulk Actions History"
-        backAction={{content: 'Products', onAction: () => window.location.href = '/'}}
+        backAction={{content: 'Products', onAction: () => navigate('/')}}
         primaryAction={{
           content: 'Create New Bulk Action',
-          onAction: () => window.location.href = '/bulk-actions/create'
+          onAction: () => navigate('/bulk-actions/create')
         }}
       >
         <Layout>

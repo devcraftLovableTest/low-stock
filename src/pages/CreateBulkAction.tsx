@@ -14,6 +14,7 @@ import {
   DataTable,
   ButtonGroup
 } from '@shopify/polaris';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from "@/integrations/supabase/client";
 
 interface ProductItem {
@@ -46,6 +47,7 @@ interface CreateBulkActionProps {
 }
 
 const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
+  const navigate = useNavigate();
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -272,7 +274,7 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
         });
         // Navigate back to bulk actions list
         setTimeout(() => {
-          window.location.href = '/bulk-actions';
+          navigate('/bulk-actions');
         }, 1500);
       } else {
         setToastMessage('Error creating bulk action');
@@ -333,7 +335,7 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
     <Frame>
       <Page 
         title="Create Bulk Price Action"
-        backAction={{content: 'Back to Bulk Actions', onAction: () => window.location.href = '/bulk-actions'}}
+        backAction={{content: 'Back to Bulk Actions', onAction: () => navigate('/bulk-actions')}}
       >
         <Layout>
           <Layout.Section>
@@ -457,7 +459,7 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
               <div style={{ padding: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                   <ButtonGroup>
-                    <Button onClick={() => window.location.href = '/bulk-actions'}>
+                    <Button onClick={() => navigate('/bulk-actions')}>
                       Cancel
                     </Button>
                     <Button 

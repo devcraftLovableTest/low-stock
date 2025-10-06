@@ -12,6 +12,7 @@ import {
   Toast,
   Frame
 } from '@shopify/polaris';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from "@/integrations/supabase/client";
 
 interface ProductItem {
@@ -37,6 +38,7 @@ interface ProductsDashboardProps {
 }
 
 const ProductsDashboard: React.FC<ProductsDashboardProps> = ({ shop }) => {
+  const navigate = useNavigate();
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -255,16 +257,12 @@ const ProductsDashboard: React.FC<ProductsDashboardProps> = ({ shop }) => {
         }}
         secondaryActions={[
           {
-            content: bulkMode ? 'Exit Bulk Mode' : 'Bulk Pricing',
-            onAction: () => {
-              setBulkMode(!bulkMode);
-              setSelectedProducts(new Set());
-              setBulkPricing({ price: '', comparePrice: '', actionName: '' });
-            },
+            content: 'Create Bulk Action',
+            onAction: () => navigate('/bulk-actions/create'),
           },
           {
             content: 'Bulk Actions History',
-            onAction: () => window.location.href = '/bulk-actions',
+            onAction: () => navigate('/bulk-actions'),
           }
         ]}
       >

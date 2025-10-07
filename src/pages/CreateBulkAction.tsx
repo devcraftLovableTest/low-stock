@@ -52,6 +52,7 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [vendors, setVendors] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingCollections, setLoadingCollections] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
   const [selectedCollections, setSelectedCollections] = useState<Set<string>>(new Set());
   const [selectedVendor, setSelectedVendor] = useState<string>('');
@@ -103,7 +104,9 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
   };
 
   const fetchCollections = async () => {
+    setLoadingCollections(true);
     try {
+      console.log('Fetching collections for shop:', shop.shop_domain);
       const response = await fetch('https://snriaelgnlnuhfuiqsdt.supabase.co/functions/v1/shopify-api', {
         method: 'POST',
         headers: {
@@ -117,10 +120,15 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('Collections received:', data.collections);
         setCollections(data.collections || []);
+      } else {
+        console.error('Failed to fetch collections:', response.status);
       }
     } catch (error) {
       console.error('Error fetching collections:', error);
+    } finally {
+      setLoadingCollections(false);
     }
   };
 
@@ -389,44 +397,70 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
                   />
                 </div>
 
-                {filterType === 'collection' && collections.length > 0 && (
+                {filterType === 'collection' && (
                   <div style={{ marginTop: '16px' }}>
                     <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
                       Select Collections
                     </h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {collections.map((collection) => (
-                        <Checkbox
-                          key={collection.id}
-                          label={`${collection.title} (${collection.products_count} products)`}
-                          checked={selectedCollections.has(collection.id)}
-                          onChange={() => handleCollectionToggle(collection.id)}
-                        />
-                      ))}
-                    </div>
+                    {loadingCollections ? (
+                      <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
+                        <Spinner size="small" />
+                      </div>
+                    ) : collections.length > 0 ? (
+                      <div style={{ 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        gap: '8px',
+                        maxHeight: '300px',
+                        overflowY: 'auto',
+                        padding: '8px',
+                        border: '1px solid #e1e3e5',
+                        borderRadius: '8px',
+                        backgroundColor: '#fff'
+                      }}>
+                        {collections.map((collection) => (
+                          <Checkbox
+                            key={collection.id}
+                            label={`${collection.title} (${collection.products_count} products)`}
+                            checked={selectedCollections.has(collection.id)}
+                            onChange={() => handleCollectionToggle(collection.id)}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <Banner tone="info">
+                        No collections found in your store.
+                      </Banner>
+                    )}
                   </div>
                 )}
 
-                {filterType === 'vendor' && vendors.length > 0 && (
+                {filterType === 'vendor' && (
                   <div style={{ marginTop: '16px' }}>
-                    <Select
-                      label="Select Vendor"
-                      options={[
-                        {label: 'Choose a vendor', value: ''},
-                        ...vendors.map(vendor => ({label: vendor, value: vendor}))
-                      ]}
-                      value={selectedVendor}
-                      onChange={(value) => {
-                        setSelectedVendor(value);
-                        // Auto-select all products from this vendor
-                        if (value) {
-                          const vendorProducts = products.filter(p => p.title.startsWith(value));
-                          setSelectedProducts(new Set(vendorProducts.map(p => p.id)));
-                        } else {
-                          setSelectedProducts(new Set());
-                        }
-                      }}
-                    />
+                    {vendors.length > 0 ? (
+                      <Select
+                        label="Select Vendor"
+                        options={[
+                          {label: 'Choose a vendor', value: ''},
+                          ...vendors.map(vendor => ({label: vendor, value: vendor}))
+                        ]}
+                        value={selectedVendor}
+                        onChange={(value) => {
+                          setSelectedVendor(value);
+                          // Auto-select all products from this vendor
+                          if (value) {
+                            const vendorProducts = products.filter(p => p.title.startsWith(value));
+                            setSelectedProducts(new Set(vendorProducts.map(p => p.id)));
+                          } else {
+                            setSelectedProducts(new Set());
+                          }
+                        }}
+                      />
+                    ) : (
+                      <Banner tone="info">
+                        No vendors found in your products.
+                      </Banner>
+                    )}
                   </div>
                 )}
               </div>

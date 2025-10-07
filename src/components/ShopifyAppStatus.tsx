@@ -5,6 +5,7 @@ import ProductsDashboard from './ProductsDashboard';
 import BulkActions from '../pages/BulkActions';
 import CreateBulkAction from '../pages/CreateBulkAction';
 import BulkActionDetail from '../pages/BulkActionDetail';
+import IntercomChat from './IntercomChat';
 import { Banner, Layout, Spinner } from '@shopify/polaris';
 import createApp from '@shopify/app-bridge';
 import { Redirect } from '@shopify/app-bridge/actions';
@@ -148,20 +149,60 @@ const ShopifyAppStatus: React.FC<ShopifyAppStatusProps> = ({
   }
 
   if (isBulkActionsPage) {
-    return <BulkActions shop={shop} />;
+    return (
+      <>
+        <IntercomChat 
+          userId={shop.id} 
+          name={shop.shop_name} 
+          email={shop.email} 
+          createdAt={shop.installed_at} 
+        />
+        <BulkActions shop={shop} />
+      </>
+    );
   }
   
   if (isCreateBulkActionPage) {
-    return <CreateBulkAction shop={shop} />;
+    return (
+      <>
+        <IntercomChat 
+          userId={shop.id} 
+          name={shop.shop_name} 
+          email={shop.email} 
+          createdAt={shop.installed_at} 
+        />
+        <CreateBulkAction shop={shop} />
+      </>
+    );
   }
   
   if (isBulkActionDetailPage) {
     const pathParts = window.location.pathname.split('/');
     const bulkActionId = pathParts[pathParts.length - 1];
-    return <BulkActionDetail shop={shop} bulkActionId={bulkActionId} />;
+    return (
+      <>
+        <IntercomChat 
+          userId={shop.id} 
+          name={shop.shop_name} 
+          email={shop.email} 
+          createdAt={shop.installed_at} 
+        />
+        <BulkActionDetail shop={shop} bulkActionId={bulkActionId} />
+      </>
+    );
   }
   
-  return <ProductsDashboard shop={shop} />;
+  return (
+    <>
+      <IntercomChat 
+        userId={shop.id} 
+        name={shop.shop_name} 
+        email={shop.email} 
+        createdAt={shop.installed_at} 
+      />
+      <ProductsDashboard shop={shop} />
+    </>
+  );
 };
 
 export default ShopifyAppStatus;

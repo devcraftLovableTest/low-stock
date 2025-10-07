@@ -331,7 +331,7 @@ async function handleUpdatePrices(supabase: any, requestBody: any, shopDomain: s
       }
     };
 
-    await fetch(`https://${shopDomain}/admin/api/2023-10/graphql.json`, {
+    await fetch(`https://${shopDomain}/admin/api/2025-07/graphql.json`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -458,7 +458,7 @@ async function handleBulkUpdatePrices(supabase: any, requestBody: any, shopDomai
         }
       };
 
-      await fetch(`https://${shopDomain}/admin/api/2023-10/graphql.json`, {
+      await fetch(`https://${shopDomain}/admin/api/2025-07/graphql.json`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -595,7 +595,7 @@ async function handleBulkUpdatePricesCalculated(supabase: any, requestBody: any,
         }
       };
 
-      await fetch(`https://${shopDomain}/admin/api/2023-10/graphql.json`, {
+      await fetch(`https://${shopDomain}/admin/api/2025-07/graphql.json`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -694,7 +694,7 @@ async function handleRevertBulkAction(supabase: any, requestBody: any, shopDomai
         }
       };
 
-      await fetch(`https://${shopDomain}/admin/api/2023-10/graphql.json`, {
+      await fetch(`https://${shopDomain}/admin/api/2025-07/graphql.json`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -767,7 +767,7 @@ async function handleFetchCollections(supabase: any, requestBody: any, shopDomai
     }
   `;
   
-  const collectionsResponse = await fetch(`https://${shopDomain}/admin/api/2023-10/graphql.json`, {
+  const collectionsResponse = await fetch(`https://${shopDomain}/admin/api/2025-07/graphql.json`, {
     method: 'POST',
     headers: {
       'X-Shopify-Access-Token': accessToken,
@@ -842,7 +842,7 @@ async function handleFetchCollectionProducts(supabase: any, requestBody: any, sh
     }
   `;
   
-  const collectionProductsResponse = await fetch(`https://${shopDomain}/admin/api/2023-10/graphql.json`, {
+  const collectionProductsResponse = await fetch(`https://${shopDomain}/admin/api/2025-07/graphql.json`, {
     method: 'POST',
     headers: {
       'X-Shopify-Access-Token': accessToken,

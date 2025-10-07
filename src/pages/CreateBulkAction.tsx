@@ -50,9 +50,12 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
   const navigate = useNavigate();
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
+  const [vendors, setVendors] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
   const [selectedCollections, setSelectedCollections] = useState<Set<string>>(new Set());
+  const [selectedVendor, setSelectedVendor] = useState<string>('');
+  const [filterType, setFilterType] = useState<'all' | 'collection' | 'vendor'>('all');
   const [bulkPricing, setBulkPricing] = useState({ 
     price: '', 
     comparePrice: '', 
@@ -84,6 +87,13 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
         setShowToast(true);
       } else {
         setProducts(data || []);
+        // Extract unique vendors
+        const uniqueVendors = Array.from(new Set(
+          (data || [])
+            .map(p => p.title.split(' - ')[0]) // Extract vendor from title
+            .filter(Boolean)
+        )).sort();
+        setVendors(uniqueVendors);
       }
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -177,10 +187,17 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
   };
 
   const handleSelectAll = () => {
-    if (selectedProducts.size === products.length) {
+    const currentFiltered = products.filter(product => {
+      if (filterType === 'vendor' && selectedVendor) {
+        return product.title.startsWith(selectedVendor);
+      }
+      return true;
+    });
+    
+    if (selectedProducts.size === currentFiltered.length) {
       setSelectedProducts(new Set());
     } else {
-      setSelectedProducts(new Set(products.map(p => p.id)));
+      setSelectedProducts(new Set(currentFiltered.map(p => p.id)));
     }
   };
 
@@ -289,7 +306,15 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
     }
   };
 
-  const productRows = products.map((product) => [
+  // Filter products based on selection
+  const filteredProducts = products.filter(product => {
+    if (filterType === 'vendor' && selectedVendor) {
+      return product.title.startsWith(selectedVendor);
+    }
+    return true;
+  });
+
+  const productRows = filteredProducts.map((product) => [
     <Checkbox
       label=""
       checked={selectedProducts.has(product.id)}
@@ -338,11 +363,104 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
         backAction={{content: 'Back to Bulk Actions', onAction: () => navigate('/bulk-actions')}}
       >
         <Layout>
+          {/* Step 1: Filter Selection */}
           <Layout.Section>
             <Card>
               <div style={{ padding: '16px' }}>
                 <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px' }}>
-                  Bulk Price Update
+                  Step 1: Select Products
+                </h2>
+                
+                <div style={{ marginBottom: '16px' }}>
+                  <Select
+                    label="Filter By"
+                    options={[
+                      {label: 'All Products', value: 'all'},
+                      {label: 'By Collection', value: 'collection'},
+                      {label: 'By Vendor', value: 'vendor'},
+                    ]}
+                    value={filterType}
+                    onChange={(value) => {
+                      setFilterType(value as 'all' | 'collection' | 'vendor');
+                      setSelectedCollections(new Set());
+                      setSelectedVendor('');
+                      setSelectedProducts(new Set());
+                    }}
+                  />
+                </div>
+
+                {filterType === 'collection' && collections.length > 0 && (
+                  <div style={{ marginTop: '16px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
+                      Select Collections
+                    </h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {collections.map((collection) => (
+                        <Checkbox
+                          key={collection.id}
+                          label={`${collection.title} (${collection.products_count} products)`}
+                          checked={selectedCollections.has(collection.id)}
+                          onChange={() => handleCollectionToggle(collection.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {filterType === 'vendor' && vendors.length > 0 && (
+                  <div style={{ marginTop: '16px' }}>
+                    <Select
+                      label="Select Vendor"
+                      options={[
+                        {label: 'Choose a vendor', value: ''},
+                        ...vendors.map(vendor => ({label: vendor, value: vendor}))
+                      ]}
+                      value={selectedVendor}
+                      onChange={(value) => {
+                        setSelectedVendor(value);
+                        // Auto-select all products from this vendor
+                        if (value) {
+                          const vendorProducts = products.filter(p => p.title.startsWith(value));
+                          setSelectedProducts(new Set(vendorProducts.map(p => p.id)));
+                        } else {
+                          setSelectedProducts(new Set());
+                        }
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </Card>
+          </Layout.Section>
+
+          {/* Step 2: Product Selection */}
+          <Layout.Section>
+            <Card>
+              <div style={{ padding: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                    Products ({selectedProducts.size} selected)
+                  </h3>
+                  <Button onClick={handleSelectAll}>
+                    {selectedProducts.size === filteredProducts.length ? 'Deselect All' : 'Select All'}
+                  </Button>
+                </div>
+              </div>
+              
+              <DataTable
+                columnContentTypes={['text', 'text', 'text', 'text', 'text', 'numeric', 'text']}
+                headings={['Select', 'Product', 'SKU', 'Price', 'Compare At', 'Inventory', 'Status']}
+                rows={productRows}
+              />
+            </Card>
+          </Layout.Section>
+
+          {/* Step 3: Price Adjustment Settings */}
+          <Layout.Section>
+            <Card>
+              <div style={{ padding: '16px' }}>
+                <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px' }}>
+                  Step 2: Configure Price Adjustment
                 </h2>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -408,49 +526,6 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
                   </div>
                 </div>
               </div>
-            </Card>
-          </Layout.Section>
-
-          {collections.length > 0 && (
-            <Layout.Section>
-              <Card>
-                <div style={{ padding: '16px' }}>
-                  <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' }}>
-                    Select Collections
-                  </h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {collections.map((collection) => (
-                      <Checkbox
-                        key={collection.id}
-                        label={`${collection.title} (${collection.products_count} products)`}
-                        checked={selectedCollections.has(collection.id)}
-                        onChange={() => handleCollectionToggle(collection.id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </Card>
-            </Layout.Section>
-          )}
-
-          <Layout.Section>
-            <Card>
-              <div style={{ padding: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3 style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                    Select Products ({selectedProducts.size} selected)
-                  </h3>
-                  <Button onClick={handleSelectAll}>
-                    {selectedProducts.size === products.length ? 'Deselect All' : 'Select All'}
-                  </Button>
-                </div>
-              </div>
-              
-              <DataTable
-                columnContentTypes={['text', 'text', 'text', 'text', 'text', 'numeric', 'text']}
-                headings={['Select', 'Product', 'SKU', 'Price', 'Compare At', 'Inventory', 'Status']}
-                rows={productRows}
-              />
             </Card>
           </Layout.Section>
 

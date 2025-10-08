@@ -305,12 +305,19 @@ async function handleUpdatePrices(supabase: any, requestBody: any, shopDomain: s
 
   const token = shopRow.access_token
 
+  // Get product info for the variant
+  const { data: productInfo, error: productErr } = await supabase
+    .from('inventory_items')
+    .select('shopify_product_id')
+    .eq('id', itemId)
+    .maybeSingle();
+
   // Update Shopify variant
-  if (itemRow.shopify_variant_id && (price || compareAtPrice)) {
+  if (itemRow.shopify_variant_id && productInfo?.shopify_product_id && (price || compareAtPrice)) {
     const mutation = `
-      mutation productVariantUpdate($input: ProductVariantInput!) {
-        productVariantUpdate(input: $input) {
-          productVariant {
+      mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+        productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+          productVariants {
             id
             price
             compareAtPrice
@@ -324,14 +331,15 @@ async function handleUpdatePrices(supabase: any, requestBody: any, shopDomain: s
     `;
 
     const variables = {
-      input: {
+      productId: `gid://shopify/Product/${productInfo.shopify_product_id}`,
+      variants: [{
         id: `gid://shopify/ProductVariant/${itemRow.shopify_variant_id}`,
         ...(price && { price: price }),
         ...(compareAtPrice && { compareAtPrice: compareAtPrice })
-      }
+      }]
     };
 
-    await fetch(`https://${shopDomain}/admin/api/2025-07/graphql.json`, {
+    const shopifyResponse = await fetch(`https://${shopDomain}/admin/api/2025-07/graphql.json`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -339,6 +347,13 @@ async function handleUpdatePrices(supabase: any, requestBody: any, shopDomain: s
       },
       body: JSON.stringify({ query: mutation, variables }),
     });
+
+    const shopifyResult = await shopifyResponse.json();
+    console.log(`Shopify update result for variant ${itemRow.shopify_variant_id}:`, shopifyResult);
+
+    if (shopifyResult.data?.productVariantsBulkUpdate?.userErrors?.length > 0) {
+      console.error('Shopify API errors:', shopifyResult.data.productVariantsBulkUpdate.userErrors);
+    }
   }
 
   // Update local database
@@ -433,11 +448,11 @@ async function handleBulkUpdatePrices(supabase: any, requestBody: any, shopDomai
       });
 
     // Update Shopify if we have variant ID
-    if (product.shopify_variant_id && (price || compareAtPrice)) {
+    if (product.shopify_variant_id && product.shopify_product_id && (price || compareAtPrice)) {
       const mutation = `
-        mutation productVariantUpdate($input: ProductVariantInput!) {
-          productVariantUpdate(input: $input) {
-            productVariant {
+        mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+          productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+            productVariants {
               id
               price
               compareAtPrice
@@ -451,11 +466,12 @@ async function handleBulkUpdatePrices(supabase: any, requestBody: any, shopDomai
       `;
 
       const variables = {
-        input: {
+        productId: `gid://shopify/Product/${product.shopify_product_id}`,
+        variants: [{
           id: `gid://shopify/ProductVariant/${product.shopify_variant_id}`,
           ...(price && { price: price }),
           ...(compareAtPrice && { compareAtPrice: compareAtPrice })
-        }
+        }]
       };
 
       console.log(`Updating variant ${product.shopify_variant_id} with prices:`, { price, compareAtPrice });
@@ -472,8 +488,8 @@ async function handleBulkUpdatePrices(supabase: any, requestBody: any, shopDomai
       const shopifyResult = await shopifyResponse.json();
       console.log(`Shopify update result for variant ${product.shopify_variant_id}:`, shopifyResult);
 
-      if (shopifyResult.data?.productVariantUpdate?.userErrors?.length > 0) {
-        console.error('Shopify API errors:', shopifyResult.data.productVariantUpdate.userErrors);
+      if (shopifyResult.data?.productVariantsBulkUpdate?.userErrors?.length > 0) {
+        console.error('Shopify API errors:', shopifyResult.data.productVariantsBulkUpdate.userErrors);
       }
     }
 
@@ -579,11 +595,11 @@ async function handleBulkUpdatePricesCalculated(supabase: any, requestBody: any,
       });
 
     // Update Shopify if we have variant ID
-    if (product.shopify_variant_id && (newPrice !== null || newComparePrice !== null)) {
+    if (product.shopify_variant_id && product.shopify_product_id && (newPrice !== null || newComparePrice !== null)) {
       const mutation = `
-        mutation productVariantUpdate($input: ProductVariantInput!) {
-          productVariantUpdate(input: $input) {
-            productVariant {
+        mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+          productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+            productVariants {
               id
               price
               compareAtPrice
@@ -597,11 +613,12 @@ async function handleBulkUpdatePricesCalculated(supabase: any, requestBody: any,
       `;
 
       const variables = {
-        input: {
+        productId: `gid://shopify/Product/${product.shopify_product_id}`,
+        variants: [{
           id: `gid://shopify/ProductVariant/${product.shopify_variant_id}`,
           ...(newPrice !== null && { price: newPrice.toString() }),
           ...(newComparePrice !== null && { compareAtPrice: newComparePrice.toString() })
-        }
+        }]
       };
 
       console.log(`Updating variant ${product.shopify_variant_id} with prices:`, { newPrice, newComparePrice });
@@ -618,8 +635,8 @@ async function handleBulkUpdatePricesCalculated(supabase: any, requestBody: any,
       const shopifyResult = await shopifyResponse.json();
       console.log(`Shopify update result for variant ${product.shopify_variant_id}:`, shopifyResult);
 
-      if (shopifyResult.data?.productVariantUpdate?.userErrors?.length > 0) {
-        console.error('Shopify API errors:', shopifyResult.data.productVariantUpdate.userErrors);
+      if (shopifyResult.data?.productVariantsBulkUpdate?.userErrors?.length > 0) {
+        console.error('Shopify API errors:', shopifyResult.data.productVariantsBulkUpdate.userErrors);
       }
     }
 
@@ -668,12 +685,12 @@ async function handleRevertBulkAction(supabase: any, requestBody: any, shopDomai
     );
   }
 
-  // Get bulk action items
+  // Get bulk action items with product IDs
   const { data: actionItems } = await supabase
     .from('bulk_action_items')
     .select(`
       *,
-      inventory_items!inner(shopify_variant_id)
+      inventory_items!inner(shopify_variant_id, shopify_product_id)
     `)
     .eq('bulk_action_id', bulkActionId);
 
@@ -686,12 +703,12 @@ async function handleRevertBulkAction(supabase: any, requestBody: any, shopDomai
 
   // Revert each product
   const revertPromises = actionItems.map(async (item: any) => {
-    // Revert Shopify if we have variant ID
-    if (item.inventory_items.shopify_variant_id) {
+    // Revert Shopify if we have variant ID and product ID
+    if (item.inventory_items.shopify_variant_id && item.inventory_items.shopify_product_id) {
       const mutation = `
-        mutation productVariantUpdate($input: ProductVariantInput!) {
-          productVariantUpdate(input: $input) {
-            productVariant {
+        mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+          productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+            productVariants {
               id
               price
               compareAtPrice
@@ -705,14 +722,15 @@ async function handleRevertBulkAction(supabase: any, requestBody: any, shopDomai
       `;
 
       const variables = {
-        input: {
+        productId: `gid://shopify/Product/${item.inventory_items.shopify_product_id}`,
+        variants: [{
           id: `gid://shopify/ProductVariant/${item.inventory_items.shopify_variant_id}`,
           price: item.original_price?.toString() || "0",
           compareAtPrice: item.original_compare_at_price?.toString() || null
-        }
+        }]
       };
 
-      await fetch(`https://${shopDomain}/admin/api/2025-07/graphql.json`, {
+      const shopifyResponse = await fetch(`https://${shopDomain}/admin/api/2025-07/graphql.json`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -720,6 +738,13 @@ async function handleRevertBulkAction(supabase: any, requestBody: any, shopDomai
         },
         body: JSON.stringify({ query: mutation, variables }),
       });
+
+      const shopifyResult = await shopifyResponse.json();
+      console.log(`Shopify revert result for variant ${item.inventory_items.shopify_variant_id}:`, shopifyResult);
+
+      if (shopifyResult.data?.productVariantsBulkUpdate?.userErrors?.length > 0) {
+        console.error('Shopify API errors during revert:', shopifyResult.data.productVariantsBulkUpdate.userErrors);
+      }
     }
 
     // Revert local database

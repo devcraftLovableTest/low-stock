@@ -18,6 +18,7 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/products" element={<Index isProductsPage={true} />} />
             <Route path="/bulk-actions" element={<Index isBulkActionsPage={true} />} />
             <Route path="/bulk-actions/create" element={<Index isCreateBulkActionPage={true} />} />
             <Route path="/bulk-actions/:id" element={<Index isBulkActionDetailPage={true} />} />

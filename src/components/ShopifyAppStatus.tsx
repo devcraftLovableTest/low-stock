@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import ShopifyInstallation from './ShopifyInstallation';
-import ProductsDashboard from './ProductsDashboard';
+import Dashboard from '../pages/Dashboard';
+import Products from '../pages/Products';
 import BulkActions from '../pages/BulkActions';
 import CreateBulkAction from '../pages/CreateBulkAction';
 import BulkActionDetail from '../pages/BulkActionDetail';
@@ -22,12 +23,14 @@ interface ShopifyAppStatusProps {
   isBulkActionsPage?: boolean;
   isCreateBulkActionPage?: boolean;
   isBulkActionDetailPage?: boolean;
+  isProductsPage?: boolean;
 }
 
 const ShopifyAppStatus: React.FC<ShopifyAppStatusProps> = ({ 
   isBulkActionsPage = false,
   isCreateBulkActionPage = false,
-  isBulkActionDetailPage = false 
+  isBulkActionDetailPage = false,
+  isProductsPage = false
 }) => {
   const [loading, setLoading] = useState(true);
   const [shop, setShop] = useState<Shop | null>(null);
@@ -192,6 +195,20 @@ const ShopifyAppStatus: React.FC<ShopifyAppStatusProps> = ({
     );
   }
   
+  if (isProductsPage) {
+    return (
+      <>
+        <IntercomChat 
+          userId={shop.id} 
+          name={shop.shop_name} 
+          email={shop.email} 
+          createdAt={shop.installed_at} 
+        />
+        <Products shop={shop} />
+      </>
+    );
+  }
+  
   return (
     <>
       <IntercomChat 
@@ -200,7 +217,7 @@ const ShopifyAppStatus: React.FC<ShopifyAppStatusProps> = ({
         email={shop.email} 
         createdAt={shop.installed_at} 
       />
-      <ProductsDashboard shop={shop} />
+      <Dashboard shop={shop} />
     </>
   );
 };

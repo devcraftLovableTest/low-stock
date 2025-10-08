@@ -458,7 +458,9 @@ async function handleBulkUpdatePrices(supabase: any, requestBody: any, shopDomai
         }
       };
 
-      await fetch(`https://${shopDomain}/admin/api/2025-07/graphql.json`, {
+      console.log(`Updating variant ${product.shopify_variant_id} with prices:`, { price, compareAtPrice });
+
+      const shopifyResponse = await fetch(`https://${shopDomain}/admin/api/2025-07/graphql.json`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -466,6 +468,13 @@ async function handleBulkUpdatePrices(supabase: any, requestBody: any, shopDomai
         },
         body: JSON.stringify({ query: mutation, variables }),
       });
+
+      const shopifyResult = await shopifyResponse.json();
+      console.log(`Shopify update result for variant ${product.shopify_variant_id}:`, shopifyResult);
+
+      if (shopifyResult.data?.productVariantUpdate?.userErrors?.length > 0) {
+        console.error('Shopify API errors:', shopifyResult.data.productVariantUpdate.userErrors);
+      }
     }
 
     // Update local database
@@ -595,7 +604,9 @@ async function handleBulkUpdatePricesCalculated(supabase: any, requestBody: any,
         }
       };
 
-      await fetch(`https://${shopDomain}/admin/api/2025-07/graphql.json`, {
+      console.log(`Updating variant ${product.shopify_variant_id} with prices:`, { newPrice, newComparePrice });
+
+      const shopifyResponse = await fetch(`https://${shopDomain}/admin/api/2025-07/graphql.json`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -603,6 +614,13 @@ async function handleBulkUpdatePricesCalculated(supabase: any, requestBody: any,
         },
         body: JSON.stringify({ query: mutation, variables }),
       });
+
+      const shopifyResult = await shopifyResponse.json();
+      console.log(`Shopify update result for variant ${product.shopify_variant_id}:`, shopifyResult);
+
+      if (shopifyResult.data?.productVariantUpdate?.userErrors?.length > 0) {
+        console.error('Shopify API errors:', shopifyResult.data.productVariantUpdate.userErrors);
+      }
     }
 
     // Update local database

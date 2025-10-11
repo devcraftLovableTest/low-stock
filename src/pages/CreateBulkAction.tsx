@@ -624,33 +624,44 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
                   marginBottom: '16px'
                 }}>
                   <Text variant="bodyMd" as="p" fontWeight="medium">
-                    {filterType === 'all' ? 'Quantity & volume discount sale' : 
-                     filterType === 'collection' ? 'Collection-based discount' : 
-                     'Vendor-based discount'}
+                    {filterType === 'all' ? 'Entire Store Price Update' : 
+                     filterType === 'collection' ? 'Collection-based Price Update' : 
+                     'Vendor-based Price Update'}
                   </Text>
-                  <Text variant="bodySm" as="p" tone="subdued">
-                    Minimum quantity of each item independently
-                  </Text>
-                  <div style={{ marginTop: '8px' }}>
+                  <div style={{ marginTop: '4px' }}>
+                    <Text variant="bodySm" as="p" tone="subdued">
+                      {selectedProducts.size} {selectedProducts.size === 1 ? 'product' : 'products'} selected
+                    </Text>
+                  </div>
+                  <div style={{ marginTop: '12px' }}>
                     <Text variant="bodySm" as="p">
                       {bulkPricing.adjustmentValue ? 
-                        `${bulkPricing.adjustmentType === 'percentage' ? bulkPricing.adjustmentValue + '%' : '$' + bulkPricing.adjustmentValue} ${bulkPricing.adjustmentDirection} on ${bulkPricing.adjustmentTarget.replace('_', ' ')}` :
-                        '% off on min quantity of'
+                        `${bulkPricing.adjustmentDirection === 'increase' ? '+' : '-'}${bulkPricing.adjustmentType === 'percentage' ? bulkPricing.adjustmentValue + '%' : '$' + bulkPricing.adjustmentValue} applied to ${bulkPricing.adjustmentTarget === 'price' ? 'price' : bulkPricing.adjustmentTarget === 'compare_price' ? 'compare at price' : 'both prices'}` :
+                        'No adjustment configured yet'
                       }
                     </Text>
                   </div>
                 </div>
 
                 <Text variant="headingSm" as="h3" fontWeight="semibold">Details</Text>
-                <ul style={{ marginTop: '12px', paddingLeft: '20px', lineHeight: '1.8' }}>
+                <ul style={{ marginTop: '12px', paddingLeft: '20px', lineHeight: '1.8', listStyle: 'disc' }}>
                   <li>
                     <Text variant="bodySm" as="span">
-                      applies to {filterType === 'all' ? 'all store' : filterType === 'collection' ? 'selected collections' : 'selected vendor'}
+                      Applies to {filterType === 'all' ? 'entire store' : filterType === 'collection' ? `${selectedCollections.size} ${selectedCollections.size === 1 ? 'collection' : 'collections'}` : selectedVendor || 'vendor not selected'}
                     </Text>
                   </li>
                   <li>
                     <Text variant="bodySm" as="span">
-                      Starts immediately
+                      {bulkPricing.adjustmentValue && bulkPricing.adjustmentType === 'percentage' 
+                        ? `${bulkPricing.adjustmentValue}% ${bulkPricing.adjustmentDirection}`
+                        : bulkPricing.adjustmentValue && bulkPricing.adjustmentType === 'fixed'
+                        ? `$${bulkPricing.adjustmentValue} ${bulkPricing.adjustmentDirection}`
+                        : 'No price adjustment set'}
+                    </Text>
+                  </li>
+                  <li>
+                    <Text variant="bodySm" as="span">
+                      Executes immediately upon creation
                     </Text>
                   </li>
                 </ul>
@@ -660,46 +671,62 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
             {/* Discount Preview Card */}
             <Card>
               <div style={{ padding: '20px' }}>
-                <Text variant="headingMd" as="h2" fontWeight="semibold">Discount preview</Text>
+                <Text variant="headingMd" as="h2" fontWeight="semibold">Price Preview</Text>
                 
-                <div style={{ marginTop: '16px' }}>
-                  <Text variant="bodyMd" as="p" fontWeight="medium">
-                    ON PRODUCT PAGE
-                  </Text>
-                  <Text variant="headingLg" as="p" fontWeight="bold">
-                    {filteredProducts.length > 0 && bulkPricing.adjustmentValue ? 
-                      formatPrice(calculatePreviewPrice(filteredProducts[0].price || 10)) : 
-                      '$10'
-                    }
-                  </Text>
-                </div>
-
-                {bulkPricing.adjustmentValue && bulkPricing.adjustmentType === 'percentage' && (
-                  <div style={{ 
-                    marginTop: '20px', 
-                    padding: '16px', 
-                    backgroundColor: '#f9fafb', 
-                    borderRadius: '8px' 
-                  }}>
-                    <Text variant="bodySm" as="p" fontWeight="medium">
-                      3 to 5 get {Math.min(10, parseFloat(bulkPricing.adjustmentValue) || 0)}%
-                    </Text>
-                    <Text variant="bodySm" as="p" fontWeight="medium">
-                      8 to 12 get {Math.min(20, parseFloat(bulkPricing.adjustmentValue) * 2 || 0)}%
-                    </Text>
+                {selectedProducts.size > 0 && bulkPricing.adjustmentValue ? (
+                  <>
+                    {Array.from(selectedProducts).slice(0, 3).map((productId) => {
+                      const product = products.find(p => p.id === productId);
+                      if (!product || !product.price) return null;
+                      
+                      const originalPrice = product.price;
+                      const newPrice = calculatePreviewPrice(originalPrice);
+                      const difference = newPrice - originalPrice;
+                      const percentChange = ((difference / originalPrice) * 100).toFixed(1);
+                      
+                      return (
+                        <div key={productId} style={{ 
+                          marginTop: '16px', 
+                          padding: '16px', 
+                          backgroundColor: '#f9fafb', 
+                          borderRadius: '8px',
+                          borderLeft: '3px solid #008060'
+                        }}>
+                          <Text variant="bodySm" as="p" tone="subdued">
+                            {product.title.length > 40 ? product.title.substring(0, 40) + '...' : product.title}
+                          </Text>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '8px' }}>
+                            <Text variant="headingLg" as="span" fontWeight="bold">
+                              {formatPrice(newPrice)}
+                            </Text>
+                            <span style={{ textDecoration: 'line-through' }}>
+                              <Text variant="bodyMd" as="span" tone="subdued">
+                                {formatPrice(originalPrice)}
+                              </Text>
+                            </span>
+                          </div>
+                          <div style={{ marginTop: '4px' }}>
+                            <Text variant="bodySm" as="p" tone={difference > 0 ? 'critical' : 'success'}>
+                              {difference > 0 ? '+' : ''}{formatPrice(Math.abs(difference))} ({difference > 0 ? '+' : ''}{percentChange}%)
+                            </Text>
+                          </div>
+                        </div>
+                      );
+                    })}
                     
-                    <div style={{ marginTop: '16px' }}>
-                      <Text variant="bodyMd" as="p" fontWeight="medium">Quantity</Text>
-                      <div style={{ 
-                        marginTop: '8px', 
-                        padding: '8px 12px', 
-                        border: '1px solid #c9cccf', 
-                        borderRadius: '4px',
-                        backgroundColor: '#fff'
-                      }}>
-                        <Text variant="bodyMd" as="p">10</Text>
+                    {selectedProducts.size > 3 && (
+                      <div style={{ marginTop: '12px', textAlign: 'center' }}>
+                        <Text variant="bodySm" as="p" tone="subdued">
+                          Showing 3 of {selectedProducts.size} products
+                        </Text>
                       </div>
-                    </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ marginTop: '16px', padding: '32px', textAlign: 'center', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+                    <Text variant="bodyMd" as="p" tone="subdued">
+                      Select products and set adjustment values to see price preview
+                    </Text>
                   </div>
                 )}
               </div>

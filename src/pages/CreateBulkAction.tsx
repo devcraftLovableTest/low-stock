@@ -12,7 +12,10 @@ import {
   Frame,
   Checkbox,
   DataTable,
-  ButtonGroup
+  ButtonGroup,
+  Badge,
+  Text,
+  ChoiceList
 } from '@shopify/polaris';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from "@/integrations/supabase/client";
@@ -336,9 +339,27 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
     product.status || 'unknown'
   ]);
 
+  const formatPrice = (price: number | null) => {
+    return price ? `$${price.toFixed(2)}` : '$0.00';
+  };
+
+  const calculatePreviewPrice = (originalPrice: number) => {
+    const value = parseFloat(bulkPricing.adjustmentValue) || 0;
+    if (bulkPricing.adjustmentType === 'percentage') {
+      const change = originalPrice * (value / 100);
+      return bulkPricing.adjustmentDirection === 'increase' 
+        ? originalPrice + change 
+        : originalPrice - change;
+    } else {
+      return bulkPricing.adjustmentDirection === 'increase' 
+        ? originalPrice + value 
+        : originalPrice - value;
+    }
+  };
+
   if (loading) {
     return (
-      <Page title="Create Bulk Action">
+      <Page title="Create Price Adjustment">
         <Layout>
           <Layout.Section>
             <Card>
@@ -367,41 +388,101 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
   return (
     <Frame>
       <Page 
-        title="Create Bulk Price Action"
-        backAction={{content: 'Back to Bulk Actions', onAction: () => navigate('/bulk-actions')}}
+        title="Create Price Adjustment"
+        backAction={{content: 'Back', onAction: () => navigate('/bulk-actions')}}
       >
-        <Layout>
-          {/* Step 1: Filter Selection */}
-          <Layout.Section>
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: '1fr 380px', 
+          gap: '20px', 
+          padding: '20px',
+          maxWidth: '100%'
+        }}>
+          {/* Left Column - Form Cards */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Campaign Name Card */}
             <Card>
-              <div style={{ padding: '16px' }}>
-                <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px' }}>
-                  Step 1: Select Products
-                </h2>
+              <div style={{ padding: '20px' }}>
+                <TextField
+                  label="Campaign name"
+                  value={bulkPricing.actionName}
+                  onChange={(value) => setBulkPricing({ ...bulkPricing, actionName: value })}
+                  placeholder="Enter the name of your discount campaign. e.g 20% off"
+                  autoComplete="off"
+                  helpText="For internal use only"
+                />
+              </div>
+            </Card>
+
+            {/* Discount Details Card */}
+            <Card>
+              <div style={{ padding: '20px' }}>
+                <Text variant="headingMd" as="h2" fontWeight="semibold">Discount Details</Text>
                 
-                <div style={{ marginBottom: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginTop: '16px' }}>
                   <Select
-                    label="Filter By"
+                    label="Price Change"
                     options={[
-                      {label: 'All Products', value: 'all'},
-                      {label: 'By Collection', value: 'collection'},
+                      { label: 'Fixed Amount', value: 'fixed' },
+                      { label: 'Percentage', value: 'percentage' }
+                    ]}
+                    value={bulkPricing.adjustmentType}
+                    onChange={(value) => setBulkPricing({ ...bulkPricing, adjustmentType: value })}
+                  />
+                  
+                  <Select
+                    label="New Price"
+                    options={[
+                      { label: 'Increase', value: 'increase' },
+                      { label: 'Decrease', value: 'decrease' }
+                    ]}
+                    value={bulkPricing.adjustmentDirection}
+                    onChange={(value) => setBulkPricing({ ...bulkPricing, adjustmentDirection: value })}
+                  />
+                  
+                  <TextField
+                    label=" "
+                    type="number"
+                    value={bulkPricing.adjustmentValue}
+                    onChange={(value) => setBulkPricing({ ...bulkPricing, adjustmentValue: value })}
+                    placeholder={bulkPricing.adjustmentType === 'percentage' ? '10' : '5.00'}
+                    prefix={bulkPricing.adjustmentType === 'fixed' ? '$' : ''}
+                    suffix={bulkPricing.adjustmentType === 'percentage' ? '%' : ''}
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+            </Card>
+
+            {/* Scope of discount Card */}
+            <Card>
+              <div style={{ padding: '20px' }}>
+                <Text variant="headingMd" as="h2" fontWeight="semibold">Scope of discount</Text>
+                
+                <div style={{ marginTop: '16px' }}>
+                  <ChoiceList
+                    title="Filter by"
+                    choices={[
+                      {label: 'Entire Store', value: 'all'},
+                      {label: 'Specific Collections', value: 'collection'},
                       {label: 'By Vendor', value: 'vendor'},
                     ]}
-                    value={filterType}
+                    selected={[filterType]}
                     onChange={(value) => {
-                      setFilterType(value as 'all' | 'collection' | 'vendor');
+                      setFilterType(value[0] as 'all' | 'collection' | 'vendor');
                       setSelectedCollections(new Set());
                       setSelectedVendor('');
-                      setSelectedProducts(new Set());
+                      if (value[0] === 'all') {
+                        setSelectedProducts(new Set(products.map(p => p.id)));
+                      } else {
+                        setSelectedProducts(new Set());
+                      }
                     }}
                   />
                 </div>
 
                 {filterType === 'collection' && (
                   <div style={{ marginTop: '16px' }}>
-                    <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px' }}>
-                      Select Collections
-                    </h3>
                     {loadingCollections ? (
                       <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
                         <Spinner size="small" />
@@ -411,12 +492,12 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
                         display: 'flex', 
                         flexDirection: 'column', 
                         gap: '8px',
-                        maxHeight: '300px',
+                        maxHeight: '200px',
                         overflowY: 'auto',
-                        padding: '8px',
+                        padding: '12px',
                         border: '1px solid #e1e3e5',
                         borderRadius: '8px',
-                        backgroundColor: '#fff'
+                        backgroundColor: '#f9fafb'
                       }}>
                         {collections.map((collection) => (
                           <Checkbox
@@ -428,9 +509,7 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
                         ))}
                       </div>
                     ) : (
-                      <Banner tone="info">
-                        No collections found in your store.
-                      </Banner>
+                      <Banner tone="info">No collections found</Banner>
                     )}
                   </div>
                 )}
@@ -439,15 +518,14 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
                   <div style={{ marginTop: '16px' }}>
                     {vendors.length > 0 ? (
                       <Select
-                        label="Select Vendor"
+                        label=""
                         options={[
-                          {label: 'Choose a vendor', value: ''},
-                          ...vendors.map(vendor => ({label: vendor, value: vendor}))
+                          { label: 'Choose a vendor', value: '' },
+                          ...vendors.map(v => ({ label: v, value: v }))
                         ]}
                         value={selectedVendor}
                         onChange={(value) => {
                           setSelectedVendor(value);
-                          // Auto-select all products from this vendor
                           if (value) {
                             const vendorProducts = products.filter(p => p.title.startsWith(value));
                             setSelectedProducts(new Set(vendorProducts.map(p => p.id)));
@@ -457,134 +535,177 @@ const CreateBulkAction: React.FC<CreateBulkActionProps> = ({ shop }) => {
                         }}
                       />
                     ) : (
-                      <Banner tone="info">
-                        No vendors found in your products.
-                      </Banner>
+                      <Banner tone="info">No vendors found</Banner>
                     )}
+                  </div>
+                )}
+
+                <div style={{ marginTop: '16px' }}>
+                  <Select
+                    label="Apply to"
+                    options={[
+                      { label: 'Price', value: 'price' },
+                      { label: 'Compare At Price', value: 'compare_price' },
+                      { label: 'Both', value: 'both' }
+                    ]}
+                    value={bulkPricing.adjustmentTarget}
+                    onChange={(value) => setBulkPricing({ ...bulkPricing, adjustmentTarget: value })}
+                  />
+                </div>
+              </div>
+            </Card>
+
+            {/* Products Table Card */}
+            <Card>
+              <div style={{ padding: '16px' }}>
+                <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text variant="headingMd" as="h2" fontWeight="semibold">
+                    Select Products
+                  </Text>
+                  <Button size="slim" onClick={handleSelectAll}>
+                    {selectedProducts.size === filteredProducts.length ? 'Deselect All' : 'Select All'}
+                  </Button>
+                </div>
+                <Text variant="bodySm" as="p" tone="subdued">
+                  {selectedProducts.size} of {filteredProducts.length} selected
+                </Text>
+              </div>
+
+              <DataTable
+                columnContentTypes={['text', 'text', 'text', 'numeric', 'numeric']}
+                headings={['', 'Product', 'SKU', 'Current Price', 'Compare At']}
+                rows={filteredProducts.map((product) => [
+                  <Checkbox
+                    label=""
+                    checked={selectedProducts.has(product.id)}
+                    onChange={() => handleProductToggle(product.id)}
+                  />,
+                  product.title,
+                  product.sku || '-',
+                  formatPrice(product.price),
+                  formatPrice(product.compare_at_price)
+                ])}
+              />
+            </Card>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+              <Button onClick={() => navigate('/bulk-actions')}>Cancel</Button>
+              <Button 
+                variant="primary" 
+                onClick={createBulkAction}
+                loading={creating}
+                disabled={!bulkPricing.actionName || selectedProducts.size === 0 || !bulkPricing.adjustmentValue}
+              >
+                Create Price Adjustment
+              </Button>
+            </div>
+          </div>
+
+          {/* Right Column - Summary Panel */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Summary Card */}
+            <Card>
+              <div style={{ padding: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <Text variant="headingMd" as="h2" fontWeight="semibold">Summary</Text>
+                  <Badge tone="success">Active</Badge>
+                </div>
+                
+                <Text variant="bodyMd" as="p" tone="subdued">
+                  {bulkPricing.actionName || 'No campaign name yet'}
+                </Text>
+
+                <div style={{ 
+                  backgroundColor: '#f9fafb', 
+                  padding: '16px', 
+                  borderRadius: '8px',
+                  marginTop: '16px',
+                  marginBottom: '16px'
+                }}>
+                  <Text variant="bodyMd" as="p" fontWeight="medium">
+                    {filterType === 'all' ? 'Quantity & volume discount sale' : 
+                     filterType === 'collection' ? 'Collection-based discount' : 
+                     'Vendor-based discount'}
+                  </Text>
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    Minimum quantity of each item independently
+                  </Text>
+                  <div style={{ marginTop: '8px' }}>
+                    <Text variant="bodySm" as="p">
+                      {bulkPricing.adjustmentValue ? 
+                        `${bulkPricing.adjustmentType === 'percentage' ? bulkPricing.adjustmentValue + '%' : '$' + bulkPricing.adjustmentValue} ${bulkPricing.adjustmentDirection} on ${bulkPricing.adjustmentTarget.replace('_', ' ')}` :
+                        '% off on min quantity of'
+                      }
+                    </Text>
+                  </div>
+                </div>
+
+                <Text variant="headingSm" as="h3" fontWeight="semibold">Details</Text>
+                <ul style={{ marginTop: '12px', paddingLeft: '20px', lineHeight: '1.8' }}>
+                  <li>
+                    <Text variant="bodySm" as="span">
+                      applies to {filterType === 'all' ? 'all store' : filterType === 'collection' ? 'selected collections' : 'selected vendor'}
+                    </Text>
+                  </li>
+                  <li>
+                    <Text variant="bodySm" as="span">
+                      Starts immediately
+                    </Text>
+                  </li>
+                </ul>
+              </div>
+            </Card>
+
+            {/* Discount Preview Card */}
+            <Card>
+              <div style={{ padding: '20px' }}>
+                <Text variant="headingMd" as="h2" fontWeight="semibold">Discount preview</Text>
+                
+                <div style={{ marginTop: '16px' }}>
+                  <Text variant="bodyMd" as="p" fontWeight="medium">
+                    ON PRODUCT PAGE
+                  </Text>
+                  <Text variant="headingLg" as="p" fontWeight="bold">
+                    {filteredProducts.length > 0 && bulkPricing.adjustmentValue ? 
+                      formatPrice(calculatePreviewPrice(filteredProducts[0].price || 10)) : 
+                      '$10'
+                    }
+                  </Text>
+                </div>
+
+                {bulkPricing.adjustmentValue && bulkPricing.adjustmentType === 'percentage' && (
+                  <div style={{ 
+                    marginTop: '20px', 
+                    padding: '16px', 
+                    backgroundColor: '#f9fafb', 
+                    borderRadius: '8px' 
+                  }}>
+                    <Text variant="bodySm" as="p" fontWeight="medium">
+                      3 to 5 get {Math.min(10, parseFloat(bulkPricing.adjustmentValue) || 0)}%
+                    </Text>
+                    <Text variant="bodySm" as="p" fontWeight="medium">
+                      8 to 12 get {Math.min(20, parseFloat(bulkPricing.adjustmentValue) * 2 || 0)}%
+                    </Text>
+                    
+                    <div style={{ marginTop: '16px' }}>
+                      <Text variant="bodyMd" as="p" fontWeight="medium">Quantity</Text>
+                      <div style={{ 
+                        marginTop: '8px', 
+                        padding: '8px 12px', 
+                        border: '1px solid #c9cccf', 
+                        borderRadius: '4px',
+                        backgroundColor: '#fff'
+                      }}>
+                        <Text variant="bodyMd" as="p">10</Text>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
             </Card>
-          </Layout.Section>
-
-          {/* Step 2: Product Selection */}
-          <Layout.Section>
-            <Card>
-              <div style={{ padding: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h3 style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                    Products ({selectedProducts.size} selected)
-                  </h3>
-                  <Button onClick={handleSelectAll}>
-                    {selectedProducts.size === filteredProducts.length ? 'Deselect All' : 'Select All'}
-                  </Button>
-                </div>
-              </div>
-              
-              <DataTable
-                columnContentTypes={['text', 'text', 'text', 'text', 'text', 'numeric', 'text']}
-                headings={['Select', 'Product', 'SKU', 'Price', 'Compare At', 'Inventory', 'Status']}
-                rows={productRows}
-              />
-            </Card>
-          </Layout.Section>
-
-          {/* Step 3: Price Adjustment Settings */}
-          <Layout.Section>
-            <Card>
-              <div style={{ padding: '16px' }}>
-                <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '16px' }}>
-                  Step 2: Configure Price Adjustment
-                </h2>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <TextField
-                    label="Action Name"
-                    value={bulkPricing.actionName}
-                    onChange={(value) => setBulkPricing({...bulkPricing, actionName: value})}
-                    placeholder="e.g., Summer Sale 2024"
-                    helpText="Give this bulk action a descriptive name"
-                    autoComplete="off"
-                  />
-                  
-                  <div style={{ display: 'flex', gap: '16px' }}>
-                    <div style={{ flex: 1 }}>
-                      <Select
-                        label="Adjustment Type"
-                        options={[
-                          {label: 'Fixed Amount ($)', value: 'fixed'},
-                          {label: 'Percentage (%)', value: 'percentage'},
-                        ]}
-                        value={bulkPricing.adjustmentType}
-                        onChange={(value) => setBulkPricing({...bulkPricing, adjustmentType: value})}
-                      />
-                    </div>
-                    
-                    <div style={{ flex: 1 }}>
-                      <Select
-                        label="Direction"
-                        options={[
-                          {label: 'Increase', value: 'increase'},
-                          {label: 'Decrease', value: 'decrease'},
-                        ]}
-                        value={bulkPricing.adjustmentDirection}
-                        onChange={(value) => setBulkPricing({...bulkPricing, adjustmentDirection: value})}
-                      />
-                    </div>
-                  </div>
-                  
-                  <div style={{ display: 'flex', gap: '16px' }}>
-                    <div style={{ flex: 1 }}>
-                      <TextField
-                        label={`${bulkPricing.adjustmentDirection === 'increase' ? 'Increase' : 'Decrease'} by ${bulkPricing.adjustmentType === 'percentage' ? '(%)' : '($)'}`}
-                        value={bulkPricing.adjustmentValue}
-                        onChange={(value) => setBulkPricing({...bulkPricing, adjustmentValue: value})}
-                        type="number"
-                        placeholder={bulkPricing.adjustmentType === 'percentage' ? '10' : '5.00'}
-                        autoComplete="off"
-                      />
-                    </div>
-                    
-                    <div style={{ flex: 1 }}>
-                      <Select
-                        label="Apply To"
-                        options={[
-                          {label: 'Price Only', value: 'price'},
-                          {label: 'Compare At Price Only', value: 'compare_price'},
-                          {label: 'Both Prices', value: 'both'},
-                        ]}
-                        value={bulkPricing.adjustmentTarget}
-                        onChange={(value) => setBulkPricing({...bulkPricing, adjustmentTarget: value})}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </Layout.Section>
-
-          <Layout.Section>
-            <Card>
-              <div style={{ padding: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <ButtonGroup>
-                    <Button onClick={() => navigate('/bulk-actions')}>
-                      Cancel
-                    </Button>
-                    <Button 
-                      variant="primary" 
-                      loading={creating}
-                      onClick={createBulkAction}
-                      disabled={selectedProducts.size === 0 || !bulkPricing.actionName.trim() || !bulkPricing.adjustmentValue}
-                    >
-                      Create Bulk Action
-                    </Button>
-                  </ButtonGroup>
-                </div>
-              </div>
-            </Card>
-          </Layout.Section>
-        </Layout>
+          </div>
+        </div>
       </Page>
       {toast}
     </Frame>
